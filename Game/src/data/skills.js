@@ -12,6 +12,8 @@ export const SKILLS = {
   'SK-12': { id:'SK-12', name:'관통샷', range:'ranged', type:'line', hits:1, acc:0.85, coeff:0.9, cost:{mp:3}, shout:'꿰뚫어주지!' },
   // 검막: 2턴 동안 10의 실드 부여
   'SK-13': { id:'SK-13', name:'검막', range:'melee', type:'shield', amount:10, duration:2, acc:1, coeff:0, cost:{mp:3}, shout:'막아낸다!' },
+  // 독화살: 적 단일 즉발 60% + 중독(최대 HP 10%/턴, 3턴)
+  'SK-22': { id:'SK-22', name:'독화살', range:'ranged', type:'poison', hits:1, acc:0.85, coeff:0.6, cost:{mp:3}, duration:3, dotPct:0.10, shout:'독을 맛봐라!' },
   // 응급 치료: 아군 단일 치유 (mag 100%)
   'SK-20': { id:'SK-20', name:'응급 치료', range:'ally', type:'heal', hits:1, acc:1, coeff:1.0, cost:{mp:3}, shout:'버텨요!' },
   'SK-21': { id:'SK-21', name:'지속 치유', range:'ally', type:'regen', amountCoeff:0.6, duration:3, acc:1, cost:{mp:4}, shout:'당신은 괜찮아요' }

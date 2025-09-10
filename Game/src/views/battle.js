@@ -85,9 +85,10 @@ export function renderBattleView(root, state){
           const buffsHtml = (()=>{
             const buf=[];
             if(u._regen && u._regen.remain>0){ buf.push(`<div class=\"slot-buff regen\" title=\"지속 회복\"><span>✚</span><span class=\"turns\">${u._regen.remain}</span></div>`); }
+            if(u._poison && u._poison.remain>0){ buf.push(`<div class=\"slot-buff poison\" title=\"중독\"><span>☠</span><span class=\"turns\">${u._poison.remain}</span></div>`); }
             return buf.join('');
           })();
-          el.innerHTML = `<div class=\"inner\"><div class=\"portrait\"></div><div class=\"hpbar\"><span style=\"width:${Math.max(0,(u.hp/u.hpMax)*100)}%\"></span><i class=\"pred\" style=\"width:0%\"></i></div><div class=\"shieldbar\" style=\"display:${(u.shield||0)>0?'block':'none'};\"><span style=\"width:${Math.max(0, Math.min(100, ((u.shield||0)/(u.hpMax||1))*100))}%\"></span></div></div><div class=\"slot-buffs\">${buffsHtml}</div>`;
+          el.innerHTML = `<div class=\"inner\"><div class=\"portrait\"></div><div class=\"hpbar\"><span style=\"width:${Math.max(0,(u.hp/u.hpMax)*100)}%\"></span><i class=\"pred\" style=\"width:0%\"></i></div><div class=\"shieldbar\" style=\"display:${(u.shield||0)>0?'block':'none'};\"><span style=\"width:${Math.max(0, Math.min(100, ((u.shield||0)/(u.hpMax||1))*100))}%\"></span></div></div><div class=\"slot-buffs\">${buffsHtml}</div><div class=\"name-label\">${u.name}</div>`;
           el.onmouseenter=(e)=>{ window.UI_TIP?.showTooltip(`${u.name}\nHP ${u.hp}/${u.hpMax} · MP ${(u.mp||0)} · SPD ${u.spd}\nATK ${u.atk} · DEF ${u.def}`, e.clientX, e.clientY); };
           el.onmousemove=(e)=>{ window.UI_TIP?.positionTip(e.clientX, e.clientY); };
           el.onmouseleave=()=> window.UI_TIP?.hideTooltip();
@@ -131,6 +132,8 @@ export function renderBattleView(root, state){
   enableSelect(allyLane, 'ally');
   // 초기 AOE 하이라이트
   // selectedSkill는 아래에서 정의되므로 이후 호출에서도 갱신됨
+  // 초기 렌더 시 턴 하이라이트 보정
+  setTimeout(()=> setTurnHighlight(), 0);
 
   // 턴 큐 + 턴 시작 시점 처리(지속힐 등)
   const tq = frame.querySelector('#turnQueue'); tq.innerHTML='';
@@ -400,6 +403,14 @@ export function renderBattleView(root, state){
     });
   }
 
+  // 현재 턴 하이라이트를 최신 턴 유닛으로 재지정
+  function setTurnHighlight(){
+    document.querySelectorAll('.unit-slot.is-turn').forEach(el=>el.classList.remove('is-turn'));
+    const lane = (B.enemyOrder.includes(B.turnUnit) ? enemyLane : allyLane);
+    const el = lane?.querySelector(`.unit-slot[data-unit-id="${B.turnUnit}"]`);
+    if(el) el.classList.add('is-turn');
+  }
+
   // 전투 로그 연출(다단히트 순차 표시)
   function animateFromLog(){
     const events = B.log || [];
@@ -486,6 +497,29 @@ export function renderBattleView(root, state){
             const bar = slotEl.querySelector('.hpbar > span'); if(bar && typeof ev.hp==='number'){ bar.style.width = `${Math.max(0,(ev.hp/(B.units[toId].hpMax||1))*100)}%`; }
             const fx = document.createElement('div'); fx.className='heal-float'; fx.textContent = `+${ev.amount||0}`; fx.style.left='50%'; fx.style.top='0'; slotEl.appendChild(fx); setTimeout(()=>fx.remove(), 900);
           }
+        } else if(ev.type==='poison'){
+          // 적용 시점: 디버프 부여 알림 + 즉시 아이콘/남은 턴 갱신
+          const toId = ev.to; const lane = (B.allyOrder.includes(toId)) ? allyLane : enemyLane; const slotEl = lane.querySelector(`.unit-slot[data-unit-id="${toId}"]`);
+          if(slotEl){
+            const fx = document.createElement('div'); fx.className='miss-float'; fx.textContent = `POISON`; fx.style.left='50%'; fx.style.top='0'; slotEl.appendChild(fx); setTimeout(()=>fx.remove(), 800);
+            // 아이콘이 없다면 추가, 있다면 남은 턴 갱신
+            let icon = slotEl.querySelector('.slot-buffs .poison');
+            if(!icon){
+              const bufWrap = slotEl.querySelector('.slot-buffs');
+              if(bufWrap){ bufWrap.insertAdjacentHTML('beforeend', `<div class="slot-buff poison" title="중독"><span>☠</span><span class="turns">${ev.duration||3}</span></div>`); }
+            } else {
+              const t = icon.querySelector('.turns'); if(t){ t.textContent = `${ev.duration||3}`; }
+            }
+          }
+        } else if(ev.type==='poisonTick'){
+          const toId = ev.to; const lane = (B.allyOrder.includes(toId)) ? allyLane : enemyLane; const slotEl = lane.querySelector(`.unit-slot[data-unit-id="${toId}"]`);
+          if(slotEl){
+            const bar = slotEl.querySelector('.hpbar > span'); if(bar && typeof ev.hp==='number'){ bar.style.width = `${Math.max(0,(ev.hp/(B.units[toId].hpMax||1))*100)}%`; }
+            const fx = document.createElement('div'); fx.className='poison-float'; fx.textContent = `-${ev.amount||0}`; fx.style.left='50%'; fx.style.top='0'; slotEl.appendChild(fx); setTimeout(()=>fx.remove(), 900);
+            // 남은 턴 수 갱신(0이 되면 제거)
+            let icon = slotEl.querySelector('.slot-buffs .poison');
+            if(icon){ const t = icon.querySelector('.turns'); if(t){ const next = Math.max(0, Number(t.textContent||'1') - 1); t.textContent = `${next}`; if(next<=0) icon.remove(); } }
+          }
         }
       }, scheduleAt);
     });
@@ -535,6 +569,15 @@ export function renderBattleView(root, state){
     document.querySelectorAll('.unit-slot .hit-badge').forEach(n=>n.remove());
     document.querySelectorAll('.unit-slot .hpbar .pred').forEach(p=>{ p.style.width='0%'; p.style.left='0%'; });
     B.animating = false;
+    // 다음 턴 시작 효과(중독/재생 등) 즉시 적용 및 연출
+    if(B.turnUnit && B.turnStartProcessedFor !== B.turnUnit){
+      window.BATTLE.applyTurnStartEffects(B);
+      const extraDelay = animateFromLog();
+      await new Promise(r=>setTimeout(r, Math.max(250, extraDelay||0)));
+      B.turnStartProcessedFor = B.turnUnit;
+    }
+    // 턴이 넘어간 후 하이라이트를 갱신
+    setTurnHighlight();
     if(window.BATTLE.isBattleFinished(B)){ return showResult(B.winner==='ally'); }
     await runEnemyPhase();
   }
@@ -546,6 +589,15 @@ export function renderBattleView(root, state){
       const foe = B.units[B.turnUnit]; if(!foe) break;
       const foeSkillId = foe.skills?.[0]; const foeSkill = foeSkillId? state.data.skills[foeSkillId]: null;
       if(!foeSkill) break;
+      // 현재 턴 유닛(적)으로 하이라이트 재지정
+      setTurnHighlight();
+      // 적 턴 시작 효과 즉시 적용(중독/재생 등)
+      if(B.turnUnit && B.turnStartProcessedFor !== B.turnUnit){
+        window.BATTLE.applyTurnStartEffects(B);
+        const extraDelay = animateFromLog();
+        await new Promise(r=>setTimeout(r, Math.max(250, extraDelay||0)));
+        B.turnStartProcessedFor = B.turnUnit;
+      }
       // 타겟 픽과 하이라이트(간단)
       B.target = window.BATTLE.pickTarget(state, B, false, foeSkill);
       document.querySelectorAll('.unit-slot.is-target').forEach(x=>x.classList.remove('is-target'));
@@ -561,6 +613,8 @@ export function renderBattleView(root, state){
       if(foeEl){ foeEl.classList.remove('attacking'); }
       await new Promise(r=>setTimeout(r, 500));
       B.animating = false;
+      // 스킬 처리로 다음 턴 유닛으로 넘어갔으므로 하이라이트 갱신
+      setTurnHighlight();
       if(window.BATTLE.isBattleFinished(B)){ showResult(B.winner==='ally'); return; }
     }
     // 애니메이션이 모두 끝난 후에만 리렌더(연출 보존)

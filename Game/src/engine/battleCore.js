@@ -52,13 +52,18 @@ export function createBattleState(state, battle){
 
 export function pickTarget(state, battleState, isAlly, sk){
   const pool = isAlly ? battleState.enemyOrder : battleState.allyOrder;
+  const selfSide = isAlly ? battleState.allyOrder : battleState.enemyOrder;
   // respect actor's last target if alive and valid
   const actorId = battleState.turnUnit;
   const remembered = battleState.lastTarget?.[actorId];
   const isAlive = (id)=> id && battleState.units[id] && (battleState.units[id].hp>0);
-  if(remembered && isAlive(remembered)){
-    if(sk?.range==='ranged' || sk?.range==='ally'){
+  // 플레이어가 명시적으로 선택한 대상이 없을 때만 기억된 타겟을 사용
+  if(!battleState.target && remembered && isAlive(remembered)){
+    if(sk?.range==='ranged'){
       if(pool.includes(remembered)) return remembered;
+    }
+    if(sk?.range==='ally'){
+      if(selfSide.includes(remembered)) return remembered;
     }
     if(sk?.range==='melee'){
       const row = battleState.units[remembered]?.row||1;
@@ -69,9 +74,11 @@ export function pickTarget(state, battleState, isAlly, sk){
   }
   // ally-targeting skills
   if(sk?.range==='ally'){
-    // prefer selected target if ally and alive; otherwise first alive ally
-    if(battleState.target && battleState.allyOrder.includes(battleState.target) && (battleState.units[battleState.target]?.hp>0)) return battleState.target;
-    return battleState.allyOrder.find(id=>id && (battleState.units[id]?.hp>0)) || null;
+    // select from actor's own side (allyOrder for allies, enemyOrder for enemies)
+    const selfSide = isAlly ? battleState.allyOrder : battleState.enemyOrder;
+    if(battleState.target && selfSide.includes(battleState.target) && (battleState.units[battleState.target]?.hp>0)) return battleState.target;
+    if(remembered && selfSide.includes(remembered) && isAlive(remembered)) return remembered;
+    return selfSide.find(id=>id && (battleState.units[id]?.hp>0)) || null;
   }
   // melee: alive units in the foremost occupied row
   if(sk?.range==='melee'){
@@ -81,6 +88,8 @@ export function pickTarget(state, battleState, isAlly, sk){
       if(candidates.length){
         // prefer user-set target if it belongs to this row
         if(battleState.target && candidates.includes(battleState.target)) return battleState.target;
+        // fallback to remembered target if it belongs to this row
+        if(remembered && candidates.includes(remembered)) return remembered;
         return candidates[0];
       }
     }
@@ -89,6 +98,7 @@ export function pickTarget(state, battleState, isAlly, sk){
   // ranged: any alive enemy
   if(sk?.range==='ranged'){
     if(battleState.target && pool.includes(battleState.target) && (battleState.units[battleState.target]?.hp>0)) return battleState.target;
+    if(remembered && pool.includes(remembered) && isAlive(remembered)) return remembered;
     return pool.find(id=>id && (battleState.units[id]?.hp>0)) || null;
   }
   // fallback: previous behavior
@@ -205,6 +215,46 @@ export function performSkill(state, battleState, actor, sk){
     if(healed>0){ battleState.log.push({ type:'heal', from: actorId, to: target.id, amount: healed, hp: target.hp }); }
     // 이후 자신의 턴 시작 때만 남은 횟수 만큼 회복
     target._regen = { remain: Math.max(0, (sk.duration||3) - 1), amount: perTurn };
+  } else if(sk.type==='poison'){
+    // 즉발 피해(ATK * coeff) + 중독 부여(최대HP 10%/턴, duration)
+    const target = battleState.units[targetId];
+    if(target){
+      // 즉발 1회 피해 처리 (명중/회피/블록/크리 등 일반 로직 재사용)
+      let died = false;
+      for(let h=0; h<(sk.hits||1); h++){
+        const res = (function(){
+          // 내부 1회 판정: tryHitOnce와 동일 로직 사용
+          const acc = clamp01(sk.acc ?? 1);
+          if(battleState.rng.next() > acc){ battleState.log.push({ type:'miss', from: actorId, to: targetId, skill: sk.id, isMulti:false, hp: target.hp, shield: target.shield||0 }); return { missed:true, died:false }; }
+          const dodge = clamp01(target.dodge||0);
+          if(battleState.rng.next() < dodge){ battleState.log.push({ type:'miss', from: actorId, to: targetId, skill: sk.id, isMulti:false }); return { missed:true, died:false }; }
+          const blocked = battleState.rng.next() < clamp01(target.block||0);
+          const crit = battleState.rng.next() < clamp01(actorUnit.crit||0);
+          let dmg = Math.max(1, Math.round(((actorUnit.atk||1) * (sk.coeff||0)) - (target.def||0)));
+          if(crit) dmg = Math.round(dmg * 1.5);
+          if(blocked) dmg = Math.max(1, Math.round(dmg * 0.2));
+          let remaining = dmg;
+          if((target.shield||0) > 0){ const use = Math.min(target.shield, remaining); target.shield -= use; remaining -= use; }
+          target.hp -= remaining;
+          battleState.log.push({ type:'hit', from: actorId, to: targetId, dmg, crit, blocked, skill: sk.id, isMulti:false, hp: target.hp, shield: target.shield||0 });
+          const died = target.hp<=0;
+          return { missed:false, died };
+        })();
+        if(res.died){ died = true; break; }
+      }
+      if(died){
+        const idx = pool.indexOf(targetId); if(idx>-1) pool[idx]=null;
+        const qi = battleState.queue.indexOf(targetId); if(qi>-1) battleState.queue.splice(qi,1);
+        battleState.log.push({ type:'dead', to: targetId });
+      }
+      // 중독 부여: 중첩 대신 갱신(남은 턴/수치 최신화)
+      if(target.hp>0){
+        const dur = Math.max(1, sk.duration||3);
+        const pct = Math.max(0, sk.dotPct||0.10);
+        target._poison = { remain: dur, pct };
+        battleState.log.push({ type:'poison', from: actorId, to: targetId, duration: dur, pct });
+      }
+    }
   } else {
     const target = battleState.units[targetId];
     let died = false;
@@ -236,6 +286,24 @@ export function performSkill(state, battleState, actor, sk){
 export function applyTurnStartEffects(battleState){
   if(!battleState?.turnUnit) return;
   const u = battleState.units[battleState.turnUnit];
+  // DOT: poison (고정 피해, 회피/블록/방어/치명 영향 없음)
+  if(u && u._poison && u._poison.remain>0 && u.hp>0){
+    const pct = Math.max(0, Math.min(1, u._poison.pct||0));
+    const dot = Math.max(1, Math.round((u.hpMax||u.hp) * pct));
+    u.hp = Math.max(0, (u.hp||0) - dot);
+    battleState.log.push({ type:'poisonTick', from: u.id, to: u.id, amount: dot, hp: u.hp });
+    u._poison.remain -= 1; if(u._poison.remain<=0) delete u._poison;
+    // 사망 시 즉시 처리: 풀/큐에서 제거하고 턴을 다음으로 넘김
+    if(u.hp<=0){
+      const pool = (battleState.allyOrder.includes(u.id)) ? battleState.allyOrder : battleState.enemyOrder;
+      const idx = pool.indexOf(u.id); if(idx>-1) pool[idx] = null;
+      const qi = battleState.queue.indexOf(u.id); if(qi>-1) battleState.queue.splice(qi,1);
+      battleState.log.push({ type:'dead', to: u.id });
+      // 다음 턴 유닛 갱신
+      battleState.turnUnit = battleState.queue[0] || null;
+      return; // regen 등 이후 효과는 적용하지 않음
+    }
+  }
   if(u && u._regen && u._regen.remain>0 && u.hp>0){
     const before = u.hp; u.hp = Math.min(u.hpMax||u.hp, u.hp + u._regen.amount);
     battleState.log.push({ type:'heal', from: u.id, to: u.id, amount: (u.hp-before), hp: u.hp });

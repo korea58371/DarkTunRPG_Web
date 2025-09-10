@@ -86,6 +86,7 @@ export function renderBattleView(root, state){
             const buf=[];
             if(u._regen && u._regen.remain>0){ buf.push(`<div class=\"slot-buff regen\" title=\"지속 회복\"><span>✚</span><span class=\"turns\">${u._regen.remain}</span></div>`); }
             if(u._poison && u._poison.remain>0){ buf.push(`<div class=\"slot-buff poison\" title=\"중독\"><span>☠</span><span class=\"turns\">${u._poison.remain}</span></div>`); }
+            if(u._bleed && u._bleed.remain>0){ buf.push(`<div class=\"slot-buff bleed\" title=\"출혈\"><span>🩸</span><span class=\"turns\">${u._bleed.remain}</span></div>`); }
             return buf.join('');
           })();
           el.innerHTML = `<div class=\"inner\"><div class=\"portrait\"></div><div class=\"hpbar\"><span style=\"width:${Math.max(0,(u.hp/u.hpMax)*100)}%\"></span><i class=\"pred\" style=\"width:0%\"></i></div><div class=\"shieldbar\" style=\"display:${(u.shield||0)>0?'block':'none'};\"><span style=\"width:${Math.max(0, Math.min(100, ((u.shield||0)/(u.hpMax||1))*100))}%\"></span></div></div><div class=\"slot-buffs\">${buffsHtml}</div><div class=\"name-label\">${u.name}</div>`;
@@ -281,19 +282,52 @@ export function renderBattleView(root, state){
     if(!targetIds.length) return;
 
     // 각 대상에 대해 배지/예상 피해 세그먼트 표시
-    const acc = Math.max(0, Math.min(1, (selectedSkill.acc||1)));
+    const baseAcc = Math.max(0, Math.min(1, (selectedSkill.acc||1)));
     const hits = Math.max(1, selectedSkill.hits||1);
     const lane = (selectedSkill.range==='ally') ? allyLane : enemyLane; // 대상 레인
     targetIds.forEach(tid=>{
       const target = B.units[tid]; if(!target) return;
-      const dodge = Math.max(0, Math.min(1, (target.dodge||0)));
-      const finalHit = selectedSkill.type==='heal' ? 100 : Math.round(acc * (1 - dodge) * 100);
+      let addDodge = 0;
+      // 패시브 보정(대상측 회피): passives.js 규칙을 사용해 per-target으로 계산
+      try{
+        const passives = state.data?.passives || {};
+        const source = B.units[B.turnUnit];
+        const effects = [];
+        const collect=(ids, applyTo)=>{ (ids||[]).forEach(pid=>{ const p=passives[pid]; if(!p) return; (p.effects||[]).forEach(e=> effects.push({p,e,applyTo})); }); };
+        collect(Array.isArray(source.passives)?source.passives:[], 'outgoing');
+        collect(Array.isArray(target.passives)?target.passives:[], 'incoming');
+        const matching = effects.filter(x=>{
+          if(x.e.applyTo && x.e.applyTo!=='incoming') return false;
+          const w=x.e.when||{}; if(w.damageType && selectedSkill.damageType!==w.damageType) return false; return x.e.hook==='modifyDodge';
+        }).sort((a,b)=> (a.e.priority||999)-(b.e.priority||999));
+        const groupBest={};
+        matching.forEach(x=>{ const g=x.p.group||x.e.group||x.p.id; const val=x.e?.add?.dodge||0; if(!(g in groupBest) || (x.e.priority||0)<(groupBest[g].prio||0)){ groupBest[g]={val, prio:(x.e.priority||0)}; } });
+        Object.values(groupBest).forEach(v=> addDodge+=v.val);
+      }catch(e){ /* fail-soft */ }
+      const dodgeBase = Math.max(0, Math.min(1, (target.dodge||0)));
+      const dodgeFinal = Math.max(0, Math.min(1, dodgeBase + addDodge));
+      const accFinal = baseAcc;
+      const finalHit = selectedSkill.type==='heal' ? 100 : Math.round(accFinal * (1 - dodgeFinal) * 100);
+      // 피해 가감 패시브가 있는 경우 예상 피해에도 반영
+      let expectedDamageMul = 1;
+      try{
+        const passives = state.data?.passives || {};
+        const source = B.units[B.turnUnit];
+        const effects = [];
+        const collect=(ids, applyTo)=>{ (ids||[]).forEach(pid=>{ const p=passives[pid]; if(!p) return; (p.effects||[]).forEach(e=> effects.push({p,e,applyTo})); }); };
+        collect(Array.isArray(source.passives)?source.passives:[], 'outgoing');
+        collect(Array.isArray(target.passives)?target.passives:[], 'incoming');
+        const dmgList = effects.filter(x=> x.e.hook==='modifyDamage' && (!x.e.applyTo || x.e.applyTo==='outgoing' || x.e.applyTo==='incoming')).filter(x=>{ const w=x.e.when||{}; if(w.damageType && selectedSkill.damageType!==w.damageType) return false; return true; }).sort((a,b)=> (a.e.priority||999)-(b.e.priority||999));
+        const groupBest={};
+        dmgList.forEach(x=>{ const g=x.p.group||x.e.group||x.p.id; const mul=(x.e?.mul?.damage)||1; if(!(g in groupBest) || (x.e.priority||0)<(groupBest[g].prio||0)){ groupBest[g]={mul, prio:(x.e.priority||0)}; } });
+        Object.values(groupBest).forEach(v=>{ expectedDamageMul *= (v.mul||1); });
+      }catch(e){ /* noop */ }
       let base = (selectedSkill.type==='heal')
         ? Math.max(1, Math.round((actor.mag||0) * (selectedSkill.coeff||1)))
         : Math.max(1, Math.round(((actor.atk||1) * (selectedSkill.coeff||1)) - (target.def||0)));
       const critP = Math.max(0, Math.min(1, actor.crit||0));
       const blockP = Math.max(0, Math.min(1, target.block||0));
-      const expectedPerHit = Math.max(1, Math.round(base * (1 + critP*0.5) * (1 - blockP*0.8)));
+      const expectedPerHit = Math.max(1, Math.round(base * (1 + critP*0.5) * (1 - blockP*0.8) * expectedDamageMul));
       let hpNowPct = Math.max(0, Math.min(100, ((target.hp)/(target.hpMax||1))*100));
       let hpAfterPct = hpNowPct;
       if(selectedSkill.type==='heal'){
@@ -337,8 +371,15 @@ export function renderBattleView(root, state){
       if(!mpOk) card.classList.add('mp-insufficient');
       card.dataset.skillId = sk.id;
       const targetText = sk.type==='row' ? (Array.isArray(sk.to)&&sk.to.length===1? `전열 전체` : `선택 라인 전체`) : (sk.range==='melee'? '근접: 가장 앞열만' : sk.range==='ranged'? '원거리: 전체 선택 가능' : (sk.to? (sk.to.includes(1)? '전열' : '후열') : '대상: 전/후열'));
-      const stats = `명중: ${Math.round((sk.acc||1)*100)}% · 대미지: ${Math.round((sk.coeff||1)*100)}% x ${sk.hits||1}`;
-      card.innerHTML = `<div class="title">${sk.name||sk.id}</div><div class="desc"></div><div class="stats">${targetText}<br>${stats}</div><div class="cost">MP ${sk.cost?.mp||0}</div>`;
+      const attr = sk.damageType ? ` · 속성: ${sk.damageType==='slash'?'참격': sk.damageType==='pierce'?'관통': sk.damageType==='magic'?'마법':'타격'}` : '';
+      const stats = `명중: ${Math.round((sk.acc||1)*100)}% · 대미지: ${Math.round((sk.coeff||1)*100)}% x ${sk.hits||1}${attr}`;
+      const debuffLine = (()=>{
+        const parts = [];
+        if(sk.bleed){ parts.push(`50% 확률로 ${sk.bleed.duration||3}턴간 출혈 상태`); }
+        if(sk.type==='poison' || sk.id==='SK-22'){ parts.push(`중독 부여(${(state.data.skills['SK-22']?.duration)||3}턴)`); }
+        return parts.length? `[${parts.join(' · ')}]` : '';
+      })();
+      card.innerHTML = `<div class="title">${sk.name||sk.id}</div><div class="desc">${debuffLine}</div><div class="stats">${targetText}<br>${stats}</div><div class="cost">MP ${sk.cost?.mp||0}</div>`;
       card.onclick=async (ev)=>{
         // if already selected and executable → use skill immediately
         const already = selectedSkill?.id === sk.id;
@@ -359,8 +400,21 @@ export function renderBattleView(root, state){
       };
       // Hover hint when selected
       card.onmouseenter=(e)=>{
-        if(selectedSkill?.id === sk.id){ window.UI_TIP?.showTooltip('한번 더 클릭 시 스킬 사용', e.clientX, e.clientY); }
-        else { const ok= selectedTarget? isTargetValid(sk, selectedTarget || B.target) : true; if(!ok){ const reason=`[${targetText} 유닛만 선택 가능합니다]`; window.UI_TIP?.showTooltip(reason, e.clientX, e.clientY);} }
+        // 선택된 카드 힌트
+        if(selectedSkill?.id === sk.id){ window.UI_TIP?.showTooltip('한번 더 클릭 시 스킬 사용', e.clientX, e.clientY); return; }
+        // 사용 불가 사유
+        const ok= selectedTarget? isTargetValid(sk, selectedTarget || B.target) : true; if(!ok){ const reason=`[${targetText} 유닛만 선택 가능합니다]`; window.UI_TIP?.showTooltip(reason, e.clientX, e.clientY); return; }
+        // 디버프 상세 툴팁
+        const tipParts=[];
+        if(sk.bleed){
+          const amt = Math.max(1, Math.round((actor.atk||0) * (sk.bleed.coeff||0.3)));
+          tipParts.push(`출혈: 매 턴 시작 시 ${amt}의 고정피해 (${sk.bleed.duration||3}턴)`);
+        }
+        if(sk.type==='poison' || sk.id==='SK-22'){
+          const amt = Math.max(1, Math.round((selectedTarget? (B.units[selectedTarget]?.hpMax||0) : 0) * (state.data.skills['SK-22']?.dotPct||0.10)));
+          tipParts.push(`중독: 매 턴 시작 시 ${amt}의 고정피해 (${(state.data.skills['SK-22']?.duration)||3}턴)`);
+        }
+        if(tipParts.length){ window.UI_TIP?.showTooltip(tipParts.join('\n'), e.clientX, e.clientY); }
       };
       card.onmousemove=(e)=>{ window.UI_TIP?.positionTip(e.clientX, e.clientY); };
       card.onmouseleave=()=> window.UI_TIP?.hideTooltip();
@@ -520,6 +574,25 @@ export function renderBattleView(root, state){
             let icon = slotEl.querySelector('.slot-buffs .poison');
             if(icon){ const t = icon.querySelector('.turns'); if(t){ const next = Math.max(0, Number(t.textContent||'1') - 1); t.textContent = `${next}`; if(next<=0) icon.remove(); } }
           }
+        } else if(ev.type==='bleed'){
+          // 출혈 부여 알림 + 아이콘 추가/갱신
+          const toId = ev.to; const lane = (B.allyOrder.includes(toId)) ? allyLane : enemyLane; const slotEl = lane.querySelector(`.unit-slot[data-unit-id="${toId}"]`);
+          if(slotEl){
+            const fx = document.createElement('div'); fx.className='miss-float'; fx.textContent = `BLEED`; fx.style.left='50%'; fx.style.top='0'; slotEl.appendChild(fx); setTimeout(()=>fx.remove(), 800);
+            let icon = slotEl.querySelector('.slot-buffs .bleed');
+            if(!icon){
+              const bufWrap = slotEl.querySelector('.slot-buffs');
+              if(bufWrap){ bufWrap.insertAdjacentHTML('beforeend', `<div class="slot-buff bleed" title="출혈"><span>🩸</span><span class="turns">${ev.duration||3}</span></div>`); }
+            } else { const t = icon.querySelector('.turns'); if(t){ t.textContent = `${ev.duration||3}`; } }
+          }
+        } else if(ev.type==='bleedTick'){
+          const toId = ev.to; const lane = (B.allyOrder.includes(toId)) ? allyLane : enemyLane; const slotEl = lane.querySelector(`.unit-slot[data-unit-id="${toId}"]`);
+          if(slotEl){
+            const bar = slotEl.querySelector('.hpbar > span'); if(bar && typeof ev.hp==='number'){ bar.style.width = `${Math.max(0,(ev.hp/(B.units[toId].hpMax||1))*100)}%`; }
+            const fx = document.createElement('div'); fx.className='bleed-float'; fx.textContent = `-${ev.amount||0}`; fx.style.left='50%'; fx.style.top='0'; slotEl.appendChild(fx); setTimeout(()=>fx.remove(), 900);
+            let icon = slotEl.querySelector('.slot-buffs .bleed');
+            if(icon){ const t = icon.querySelector('.turns'); if(t){ const next = Math.max(0, Number(t.textContent||'1') - 1); t.textContent = `${next}`; if(next<=0) icon.remove(); } }
+          }
         }
       }, scheduleAt);
     });
@@ -603,6 +676,9 @@ export function renderBattleView(root, state){
       document.querySelectorAll('.unit-slot.is-target').forEach(x=>x.classList.remove('is-target'));
       const foeEl = enemyLane.querySelector(`.unit-slot[data-unit-id="${B.turnUnit}"]`);
       if(foeEl){ foeEl.classList.add('attacking'); }
+      // 적 스킬 대사 표시
+      const foeShout = foeSkill?.shout;
+      if(foeEl && foeShout){ const sp=document.createElement('div'); sp.className='speech'; sp.textContent=foeShout; foeEl.appendChild(sp); setTimeout(()=>{ if(sp.parentElement) sp.remove(); }, 1800); }
       const tEl = (B.enemyOrder.includes(B.target)? enemyLane : allyLane).querySelector(`.unit-slot[data-unit-id="${B.target}"]`);
       if(tEl) tEl.classList.add('is-target');
       await new Promise(r=>setTimeout(r, 220));

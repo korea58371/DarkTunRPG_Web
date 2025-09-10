@@ -1,17 +1,24 @@
 export const SKILLS = {
   // 일반 공격: 전열 단일
-  'SK-01': { id:'SK-01', name:'일반 공격', range:'melee', type:'strike', hits:1, acc:1.0, coeff:1.0, cost:{mp:0}, shout:'하압!' },
+  // 베기: 전열 단일 + 50% 확률 3턴 출혈(틱 계수 0.3)
+  'SK-01': { id:'SK-01', name:'베기', range:'melee', type:'strike', hits:1, acc:1.0, coeff:1.0, cost:{mp:0}, shout:'하압!', damageType:'slash', bleed:{ chance:0.5, duration:3, coeff:0.3 } },
   // 마구 베기: 낮은 명중 3회타
   'SK-03': { id:'SK-03', name:'마구 베기', range:'melee', type:'multi', hits:3, acc:0.7, coeff:0.6, cost:{mp:2}, shout:'으아아앗!' },
-  // 화살: 후열에서 사용, 후열 우선
-  'SK-02': { id:'SK-02', name:'화살', range:'ranged', type:'strike', hits:1, acc:0.85, coeff:1.0, cost:{mp:2}, shout:'집중해..!' },
-  'SK-10': { id:'SK-10', name:'해골 베기', range:'melee', type:'strike', hits:1, acc:0.85, coeff:1.0, cost:{mp:0}, shout:'그르르…' },
+  // 활쏘기: 원거리 기본 공격
+  'SK-02': { id:'SK-02', name:'활쏘기', range:'ranged', type:'strike', hits:1, acc:0.85, coeff:1.0, cost:{mp:2}, shout:'집중해..!', damageType:'pierce' },
+  'SK-10': { id:'SK-10', name:'해골 베기', range:'melee', type:'strike', hits:2, acc:0.85, coeff:1.2, cost:{mp:0}, shout:'그르르…' },
   // 일도양단: 전열 전체(적 row 1 전체), MP 5
-  'SK-11': { id:'SK-11', name:'일도양단', range:'melee', type:'row', hits:1, acc:0.9, coeff:0.95, cost:{mp:5}, shout:'일도양단!', to:[1] },
+  'SK-11': { id:'SK-11', name:'일도양단', range:'melee', type:'row', hits:1, acc:0.9, coeff:0.95, cost:{mp:5}, shout:'일도양단!', to:[1], damageType:'slash' },
   // 관통샷: 선택한 세로 라인(열) 전체, MP 3
-  'SK-12': { id:'SK-12', name:'관통샷', range:'ranged', type:'line', hits:1, acc:0.85, coeff:0.9, cost:{mp:3}, shout:'꿰뚫어주지!' },
+  'SK-12': { id:'SK-12', name:'관통샷', range:'ranged', type:'line', hits:1, acc:0.85, coeff:0.9, cost:{mp:3}, shout:'꿰뚫어주지!', damageType:'pierce' },
   // 검막: 2턴 동안 10의 실드 부여
   'SK-13': { id:'SK-13', name:'검막', range:'melee', type:'shield', amount:10, duration:2, acc:1, coeff:0, cost:{mp:3}, shout:'막아낸다!' },
+  // 마력탄: 원거리, MP 1 소모
+  'SK-30': { id:'SK-30', name:'마력탄', range:'ranged', type:'strike', hits:1, acc:1.0, coeff:1.0, cost:{mp:1}, shout:'파편이여!', damageType:'magic' },
+  // 검면치기: 근접, 타격 피해
+  'SK-31': { id:'SK-31', name:'검면치기', range:'melee', type:'strike', hits:1, acc:0.95, coeff:1.1, cost:{mp:0}, shout:'받아라!', damageType:'blunt' },
+  // 찌르기: 근접, 관통 피해, MP 소모 없음
+  'SK-32': { id:'SK-32', name:'찌르기', range:'melee', type:'strike', hits:1, acc:1.0, coeff:1.0, cost:{mp:0}, shout:'찔러라!', damageType:'pierce' },
   // 독화살: 적 단일 즉발 60% + 중독(최대 HP 10%/턴, 3턴)
   'SK-22': { id:'SK-22', name:'독화살', range:'ranged', type:'poison', hits:1, acc:0.85, coeff:0.6, cost:{mp:3}, duration:3, dotPct:0.10, shout:'독을 맛봐라!' },
   // 응급 치료: 아군 단일 치유 (mag 100%)

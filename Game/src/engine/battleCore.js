@@ -119,24 +119,84 @@ export function performSkill(state, battleState, actor, sk){
     const atk = attacker.atk||1; const def = target.def||0;
     return Math.max(1, Math.round((atk * coeff) - def));
   };
+  const applyPassiveModifiers = (state, { attacker, target, skill, acc, dodge, block, crit, dmgMul })=>{
+    // Collect passives from source/target
+    const passivesMap = state.data?.passives || {};
+    const sourceIds = Array.isArray(attacker.passives)? attacker.passives : [];
+    const targetIds = Array.isArray(target.passives)? target.passives : [];
+    const effects = [];
+    const push = (pid, holder, applyTo)=>{
+      const p = passivesMap[pid]; if(!p) return;
+      (p.effects||[]).forEach(e=>{ effects.push({ p, e, holder, applyTo }); });
+    };
+    sourceIds.forEach(pid=> push(pid, 'source', 'outgoing'));
+    targetIds.forEach(pid=> push(pid, 'target', 'incoming'));
+    // Filter hooks and conditions
+    const ctx = { attacker, target, skill };
+    const matching = effects.filter(x=>{
+      if(x.e.applyTo && x.e.applyTo !== x.applyTo) return false;
+      const w = x.e.when || {};
+      if(w.damageType && skill?.damageType !== w.damageType) return false;
+      return true;
+    });
+    // Group + priority + combine rules
+    // Stats start
+    let res = { acc, dodge, block, crit, dmgMul: (typeof dmgMul==='number'? dmgMul : 1) };
+    const byHook = (hook)=> matching.filter(x=> x.e.hook===hook).sort((a,b)=> (a.e.priority||999)-(b.e.priority||999));
+    const applyAdd = (key, add)=>{ if(typeof add==='number'){ res[key] = (res[key]||0) + add; } };
+    // modifyDodge: 합연산, 같은 group은 우선순위 높은 것만 적용
+    const dodgeList = byHook('modifyDodge');
+    const groupMax = {};
+    dodgeList.forEach(x=>{
+      const g = x.p.group||x.e.group||x.p.id;
+      const val = x.e?.add?.dodge || 0;
+      if(!(g in groupMax) || (x.e.priority||0) < (groupMax[g].prio||0)){
+        groupMax[g] = { val, prio: (x.e.priority||0) };
+      }
+    });
+    Object.values(groupMax).forEach(v=> applyAdd('dodge', v.val));
+    // modifyDamage: 곱연산, 그룹 우선 적용(동일 그룹은 우선 하나만), 이후 전부 곱
+    const dmgList = byHook('modifyDamage');
+    const dmgGroup = {};
+    dmgList.forEach(x=>{
+      const g = x.p.group||x.e.group||x.p.id;
+      const mul = (x.e?.mul?.damage)||1;
+      if(!(g in dmgGroup) || (x.e.priority||0) < (dmgGroup[g].prio||0)){
+        dmgGroup[g] = { mul, prio: (x.e.priority||0) };
+      }
+    });
+    Object.values(dmgGroup).forEach(v=>{ res.dmgMul = res.dmgMul * (v.mul||1); });
+    return res;
+  };
   const tryHitOnce = (fromId, attacker, toId, target, skill)=>{
     // hit check
-    const acc = clamp01(skill.acc ?? 1);
+    let acc = clamp01(skill.acc ?? 1);
+    let dodge = clamp01(target.dodge||0);
+    let block = clamp01(target.block||0);
+    let crit = clamp01(attacker.crit||0);
+    // Passive system: modify stats
+    const mod = applyPassiveModifiers(state, { attacker, target, skill, acc, dodge, block, crit });
+    acc = clamp01(mod.acc ?? acc);
+    dodge = clamp01(mod.dodge ?? dodge);
+    block = clamp01(mod.block ?? block);
+    crit = clamp01(mod.crit ?? crit);
     if(battleState.rng.next() > acc){
       battleState.log.push({ type:'miss', from: fromId, to: toId, skill: skill.id, isMulti: (skill.hits||1)>1, hp: target.hp, shield: target.shield||0 });
       return { missed:true, died:false };
     }
     // dodge
-    const dodge = clamp01(target.dodge||0);
     if(battleState.rng.next() < dodge){
       battleState.log.push({ type:'miss', from: fromId, to: toId, skill: skill.id, isMulti: (skill.hits||1)>1 });
       return { missed:true, died:false };
     }
     // block / crit
-    const blocked = battleState.rng.next() < clamp01(target.block||0);
-    const crit = battleState.rng.next() < clamp01(attacker.crit||0);
+    const blocked = battleState.rng.next() < block;
+    const isCrit = battleState.rng.next() < crit;
     let dmg = calcBaseDamage(attacker, target, skill);
-    if(crit) dmg = Math.round(dmg * 1.5);
+    // Passive damage multiplier
+    const mod2 = applyPassiveModifiers(state, { attacker, target, skill, dmgMul:1 });
+    dmg = Math.max(1, Math.round(dmg * (mod2.dmgMul||1)));
+    if(isCrit) dmg = Math.round(dmg * 1.5);
     if(blocked) dmg = Math.max(1, Math.round(dmg * 0.2));
     // apply shield then hp
     let remaining = dmg;
@@ -269,6 +329,13 @@ export function performSkill(state, battleState, actor, sk){
       const qi = battleState.queue.indexOf(targetId); if(qi>-1) battleState.queue.splice(qi,1);
       battleState.log.push({ type:'dead', to: targetId });
     }
+    // 출혈 부여(스킬 메타에 존재할 경우): 확률로 대상에게 시전자 공격력 기반 틱 설정
+    if(!died && sk.bleed && target && (battleState.rng.next() < Math.max(0, Math.min(1, sk.bleed.chance||0)))){
+      const dur = Math.max(1, sk.bleed.duration||3);
+      const perTurn = Math.max(1, Math.round((actorUnit.atk||0) * (sk.bleed.coeff||0.3)));
+      target._bleed = { remain: dur, amount: perTurn };
+      battleState.log.push({ type:'bleed', from: actorId, to: targetId, duration: dur, amount: perTurn });
+    }
   }
   // last action tracking removed per spec
   battleState.target = null;
@@ -308,6 +375,21 @@ export function applyTurnStartEffects(battleState){
     const before = u.hp; u.hp = Math.min(u.hpMax||u.hp, u.hp + u._regen.amount);
     battleState.log.push({ type:'heal', from: u.id, to: u.id, amount: (u.hp-before), hp: u.hp });
     u._regen.remain -= 1; if(u._regen.remain<=0) delete u._regen;
+  }
+  // Bleed: 시전자 atk 기반 고정 피해 틱
+  if(u && u._bleed && u._bleed.remain>0 && u.hp>0){
+    const dot = Math.max(1, Math.round(u._bleed.amount||0));
+    u.hp = Math.max(0, (u.hp||0) - dot);
+    battleState.log.push({ type:'bleedTick', from: u.id, to: u.id, amount: dot, hp: u.hp });
+    u._bleed.remain -= 1; if(u._bleed.remain<=0) delete u._bleed;
+    if(u.hp<=0){
+      const pool = (battleState.allyOrder.includes(u.id)) ? battleState.allyOrder : battleState.enemyOrder;
+      const idx = pool.indexOf(u.id); if(idx>-1) pool[idx] = null;
+      const qi = battleState.queue.indexOf(u.id); if(qi>-1) battleState.queue.splice(qi,1);
+      battleState.log.push({ type:'dead', to: u.id });
+      battleState.turnUnit = battleState.queue[0] || null;
+      return;
+    }
   }
 }
 

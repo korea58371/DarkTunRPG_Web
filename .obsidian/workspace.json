@@ -6,7 +6,7 @@
       {
         "id": "958974b133e9e04c",
         "type": "tabs",
-        "dimension": 65.54694229112833,
+        "dimension": 65.54694229112835,
         "children": [
           {
             "id": "6c4d9e47f26fc414",
@@ -76,20 +76,6 @@
               },
               "icon": "lucide-file",
               "title": "무제"
-            }
-          },
-          {
-            "id": "89b51249c41062e8",
-            "type": "leaf",
-            "state": {
-              "type": "markdown",
-              "state": {
-                "file": "스킬 종류.md",
-                "mode": "source",
-                "source": false
-              },
-              "icon": "lucide-file",
-              "title": "스킬 종류"
             }
           }
         ],
@@ -260,16 +246,19 @@
   },
   "active": "dc0c5b887d6c472f",
   "lastOpenFiles": [
-    "스킬 종류.md",
+    "Game/src/data/passives.js",
+    "GDD/시스템/[SYS] 전투 - 데이터와 수치.md",
+    "GDD/시스템/[SYS] 전투 - UI.md",
+    "GDD/시스템/[SYS] 전투 - 공격 속성과 패시브.md",
+    "GDD/시스템/[SYS] 전투 - 타겟팅과 범위.md",
+    "GDD/시스템/[SYS] 전투 - 턴과 행동.md",
+    "GDD/시스템/[SYS] 전투 - 개요.md",
     "상태이상.md",
-    "무제.md",
-    "레벨.md",
-    "등급.md",
-    "UI_스토리분기.png",
-    "종족 종류.md",
-    "위험색.md",
+    "무제 1.md",
     "작업 폴더/환영합니다!.md",
     "작업 폴더",
+    "스킬 종류.md",
+    "종족 종류.md",
     "Game/src/data/battles.js",
     "Game/src/data/skills.js",
     "Game/src/data/units.js",
@@ -277,7 +266,9 @@
     "Game/src/data/routes.js",
     "Game/src/data/index.js",
     "Game/src/data",
+    "레벨.md",
     "다회차 플레이.md",
+    "무제.md",
     "GDD/시스템/[SYS] 상태 지속.md",
     "GDD/시스템/[SYS] 부대 정비.md",
     "GDD/시스템/[SYS] 턴제 전투 시스템.md",
@@ -285,17 +276,13 @@
     "GDD/UX/[UX] 루트 선택 UI.md",
     "GDD/콘텐츠/[CNT] 에피소드 타일.md",
     "GDD/시스템/[SYS] 스토리 분기 시스템.md",
+    "위험색.md",
+    "등급.md",
     "GDD/[IDX] 인덱스.md",
     "Game/run.ps1",
     "Game/run.bat",
     "Game/README.md",
-    "루트 선택.md",
-    "스토리 분기.md",
-    "GDD/데이터/데이터 모델 가이드.md",
-    "GDD/시스템/상태 지속.md",
-    "GDD/시스템/부대 정비.md",
-    "GDD/시스템/턴제 전투 시스템.md",
-    "GDD/콘텐츠/에피소드 타일.md",
+    "UI_스토리분기.png",
     "Pasted image 20250908223604.png"
   ]
 }

@@ -363,9 +363,9 @@ export function renderBattleView(root, state){
     // no decide button; execution is triggered by clicking the selected card again
     const list = actor.skills?.length? actor.skills : ['SK-01'];
     // 정렬: 사용 가능 먼저, MP 부족/타겟 불가 뒤로
-    const enriched = list.map(skId=>{
-      const sk = state.data.skills[skId]; if(!sk) return null; const usable = canExecute(sk, selectedTarget || B.target); const mpOk = (actor.mp||0) >= (sk.cost?.mp||0); return { sk, usable, mpOk };
-    }).filter(Boolean).sort((a,b)=> (a.usable===b.usable)?0 : a.usable? -1 : 1);
+    const enriched = list.map((skId, idx)=>{
+      const sk = state.data.skills[skId]; if(!sk) return null; const usable = canExecute(sk, selectedTarget || B.target); const mpOk = (actor.mp||0) >= (sk.cost?.mp||0); return { sk, usable, mpOk, idx };
+    }).filter(Boolean).sort((a,b)=> a.idx - b.idx); // 항상 원래 스킬 순서 유지
     enriched.forEach(({sk, mpOk})=>{
       const card = document.createElement('div'); card.className='action-card'+(selectedSkill?.id===sk.id?' selected':'');
       if(!mpOk) card.classList.add('mp-insufficient');

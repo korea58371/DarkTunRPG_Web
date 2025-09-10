@@ -279,36 +279,23 @@ export function performSkill(state, battleState, actor, sk){
     // 즉발 피해(ATK * coeff) + 중독 부여(최대HP 10%/턴, duration)
     const target = battleState.units[targetId];
     if(target){
-      // 즉발 1회 피해 처리 (명중/회피/블록/크리 등 일반 로직 재사용)
-      let died = false;
-      for(let h=0; h<(sk.hits||1); h++){
-        const res = (function(){
-          // 내부 1회 판정: tryHitOnce와 동일 로직 사용
-          const acc = clamp01(sk.acc ?? 1);
-          if(battleState.rng.next() > acc){ battleState.log.push({ type:'miss', from: actorId, to: targetId, skill: sk.id, isMulti:false, hp: target.hp, shield: target.shield||0 }); return { missed:true, died:false }; }
-          const dodge = clamp01(target.dodge||0);
-          if(battleState.rng.next() < dodge){ battleState.log.push({ type:'miss', from: actorId, to: targetId, skill: sk.id, isMulti:false }); return { missed:true, died:false }; }
-          const blocked = battleState.rng.next() < clamp01(target.block||0);
-          const crit = battleState.rng.next() < clamp01(actorUnit.crit||0);
-          let dmg = Math.max(1, Math.round(((actorUnit.atk||1) * (sk.coeff||0)) - (target.def||0)));
-          if(crit) dmg = Math.round(dmg * 1.5);
-          if(blocked) dmg = Math.max(1, Math.round(dmg * 0.2));
-          let remaining = dmg;
-          if((target.shield||0) > 0){ const use = Math.min(target.shield, remaining); target.shield -= use; remaining -= use; }
-          target.hp -= remaining;
-          battleState.log.push({ type:'hit', from: actorId, to: targetId, dmg, crit, blocked, skill: sk.id, isMulti:false, hp: target.hp, shield: target.shield||0 });
-          const died = target.hp<=0;
-          return { missed:false, died };
-        })();
-        if(res.died){ died = true; break; }
+      let died = false; let anyHit = false;
+      const applyMode = sk.applyOn || 'hit';
+      if(applyMode !== 'always'){
+        for(let h=0; h<(sk.hits||1); h++){
+          const res = tryHitOnce(actorId, actorUnit, targetId, target, sk);
+          if(!res.missed) anyHit = true;
+          if(res.died){ died = true; break; }
+        }
+        if(died){
+          const idx = pool.indexOf(targetId); if(idx>-1) pool[idx]=null;
+          const qi = battleState.queue.indexOf(targetId); if(qi>-1) battleState.queue.splice(qi,1);
+          battleState.log.push({ type:'dead', to: targetId });
+        }
       }
-      if(died){
-        const idx = pool.indexOf(targetId); if(idx>-1) pool[idx]=null;
-        const qi = battleState.queue.indexOf(targetId); if(qi>-1) battleState.queue.splice(qi,1);
-        battleState.log.push({ type:'dead', to: targetId });
-      }
-      // 중독 부여: 중첩 대신 갱신(남은 턴/수치 최신화)
-      if(target.hp>0){
+      // 중독 부여: on-hit 또는 always 조건 충족 시 적용. 중첩 대신 갱신
+      const canApply = (applyMode==='always') || (anyHit && !died);
+      if(canApply && target.hp>0){
         const dur = Math.max(1, sk.duration||3);
         const pct = Math.max(0, sk.dotPct||0.10);
         target._poison = { remain: dur, pct };
@@ -317,9 +304,10 @@ export function performSkill(state, battleState, actor, sk){
     }
   } else {
     const target = battleState.units[targetId];
-    let died = false;
+    let died = false; let anyHit = false;
     for(let h=0; h<(sk.hits||1); h++){
       const res = tryHitOnce(actorId, actorUnit, targetId, target, sk);
+      if(!res.missed) anyHit = true;
       if(res.died){
         died = true; break;
       }
@@ -329,8 +317,8 @@ export function performSkill(state, battleState, actor, sk){
       const qi = battleState.queue.indexOf(targetId); if(qi>-1) battleState.queue.splice(qi,1);
       battleState.log.push({ type:'dead', to: targetId });
     }
-    // 출혈 부여(스킬 메타에 존재할 경우): 확률로 대상에게 시전자 공격력 기반 틱 설정
-    if(!died && sk.bleed && target && (battleState.rng.next() < Math.max(0, Math.min(1, sk.bleed.chance||0)))){
+    // 출혈 부여(스킬 메타에 존재할 경우): "적중 시" 확률로 적용
+    if(anyHit && !died && sk.bleed && target && (battleState.rng.next() < Math.max(0, Math.min(1, sk.bleed.chance||0)))){
       const dur = Math.max(1, sk.bleed.duration||3);
       const perTurn = Math.max(1, Math.round((actorUnit.atk||0) * (sk.bleed.coeff||0.3)));
       target._bleed = { remain: dur, amount: perTurn };

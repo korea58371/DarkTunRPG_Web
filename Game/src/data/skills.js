@@ -4,8 +4,8 @@ export const SKILLS = {
   'SK-01': { id:'SK-01', name:'베기', range:'melee', type:'strike', hits:1, acc:1.0, coeff:1.0, cost:{mp:0}, shout:'하압!', damageType:'slash', bleed:{ chance:0.5, duration:3, coeff:0.3 } },
   // 마구 베기: 낮은 명중 3회타
   'SK-03': { id:'SK-03', name:'마구 베기', range:'melee', type:'multi', hits:3, acc:0.7, coeff:0.6, cost:{mp:2}, shout:'으아아앗!' },
-  // 활쏘기: 원거리 기본 공격
-  'SK-02': { id:'SK-02', name:'활쏘기', range:'ranged', type:'strike', hits:1, acc:0.85, coeff:1.0, cost:{mp:2}, shout:'집중해..!', damageType:'pierce' },
+  // 활쏘기: 원거리 기본 공격 (MP 소모 없음)
+  'SK-02': { id:'SK-02', name:'활쏘기', range:'ranged', type:'strike', hits:1, acc:0.85, coeff:1.0, cost:{mp:0}, shout:'집중해..!', damageType:'pierce' },
   'SK-10': { id:'SK-10', name:'해골 베기', range:'melee', type:'strike', hits:2, acc:0.85, coeff:1.2, cost:{mp:0}, shout:'그르르…' },
   // 일도양단: 전열 전체(적 row 1 전체), MP 5
   'SK-11': { id:'SK-11', name:'일도양단', range:'melee', type:'row', hits:1, acc:0.9, coeff:0.95, cost:{mp:5}, shout:'일도양단!', to:[1], damageType:'slash' },
@@ -19,6 +19,8 @@ export const SKILLS = {
   'SK-31': { id:'SK-31', name:'검면치기', range:'melee', type:'strike', hits:1, acc:0.95, coeff:1.1, cost:{mp:0}, shout:'받아라!', damageType:'blunt' },
   // 찌르기: 근접, 관통 피해, MP 소모 없음
   'SK-32': { id:'SK-32', name:'찌르기', range:'melee', type:'strike', hits:1, acc:1.0, coeff:1.0, cost:{mp:0}, shout:'찔러라!', damageType:'pierce' },
+  // 필중사격: 원거리, 명중 보정 +100%, MP 2
+  'SK-33': { id:'SK-33', name:'필중사격', range:'ranged', type:'strike', hits:1, acc:2.0, accAdd:1.0, coeff:1.0, cost:{mp:2}, shout:'정확히!', damageType:'pierce' },
   // 독화살: 적 단일 즉발 60% + 중독(최대 HP 10%/턴, 3턴)
   'SK-22': { id:'SK-22', name:'독화살', range:'ranged', type:'poison', hits:1, acc:0.85, coeff:0.6, cost:{mp:3}, duration:3, dotPct:0.10, shout:'독을 맛봐라!' },
   // 응급 치료: 아군 단일 치유 (mag 100%)

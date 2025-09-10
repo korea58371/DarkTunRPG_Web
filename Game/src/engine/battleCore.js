@@ -1,7 +1,7 @@
 // Minimal battle core extracted from app.js prototype
 export function createBattleState(state, battle){
   const units = {};
-  const inst = (baseId, tag, idx)=>{
+  const inst = (baseId, tag, idx, placement)=>{
     if(!baseId) return null;
     const base = state.data.units[baseId];
     if(!base) return null;
@@ -10,8 +10,19 @@ export function createBattleState(state, battle){
     const legacyPos = posOverride ?? base.position ?? base.row ?? 2;
     // map legacy 1..9 to row 1..3 (front=1, mid=2, rear=3). If already 1..3, keep.
     const rowFromLegacy = legacyPos <= 3 ? legacyPos : Math.min(3, Math.max(1, Math.ceil(legacyPos/3)));
-    const row = tag==='A' ? (Math.floor(idx/3)+1) : rowFromLegacy;
-    const col = tag==='A' ? (idx%3) : (Number.isInteger(base?.position) ? ((base.position-1)%3) : undefined);
+    let row = tag==='A' ? (Math.floor(idx/3)+1) : rowFromLegacy;
+    let col = tag==='A' ? (idx%3) : (Number.isInteger(base?.position) ? ((base.position-1)%3) : undefined);
+    // Battle-specific placement override for enemies
+    if(tag==='E' && placement){
+      if(Number.isInteger(placement.position)){
+        const p = placement.position;
+        row = p <= 3 ? p : Math.min(3, Math.max(1, Math.ceil(p/3)));
+        col = (p-1)%3;
+      } else {
+        if(Number.isInteger(placement.row)) row = Math.min(3, Math.max(1, placement.row));
+        if(Number.isInteger(placement.col)) col = Math.min(2, Math.max(0, placement.col));
+      }
+    }
     const mpMax = base.mpMax ?? base.mp ?? 0;
     const persistedHp = state.persist?.hp?.[baseId];
     const persistedMp = state.persist?.mp?.[baseId];
@@ -22,7 +33,12 @@ export function createBattleState(state, battle){
     return id;
   };
   const allyOrder = state.party.members.map((id,i)=>inst(id,'A',i)).filter(Boolean);
-  const enemyOrder = battle.enemy.map((id,i)=>inst(id,'E',i)).filter((v,i)=> i<9 && v); // cap 9
+  const enemyOrder = (battle.enemy||[]).map((entry,i)=>{
+    if(!entry) return null;
+    if(typeof entry === 'string') return inst(entry,'E',i,null);
+    const baseId = entry.unit || entry.id;
+    return inst(baseId,'E',i, entry);
+  }).filter((v,i)=> i<9 && v); // cap 9
   // Enforce unique (row,col) per enemy; if collision, place to next available slot (row/col)
   const occ = { 1:[null,null,null], 2:[null,null,null], 3:[null,null,null] };
   enemyOrder.forEach(id=>{
@@ -46,6 +62,14 @@ export function createBattleState(state, battle){
   });
   const all = [...allyOrder, ...enemyOrder];
   const queue = all.sort((a,b)=> (units[b].spd||0) - (units[a].spd||0));
+  // 조작 턴은 아군만: 적이 선두라면 아군 중 최속으로 시작 지점 보정
+  if(queue.length && !allyOrder.includes(queue[0])){
+    const fastestAlly = allyOrder.filter(Boolean).sort((a,b)=> (units[b].spd||0)-(units[a].spd||0))[0];
+    if(fastestAlly){
+      const i = queue.indexOf(fastestAlly);
+      if(i>0){ queue.splice(i,1); queue.unshift(fastestAlly); }
+    }
+  }
   const turnUnit = queue[0];
   return { allyOrder, enemyOrder, queue, turnUnit, target:null, units, winner:null, rng: state.rng, log: [], id: battle?.id, battle, partySnapshot: (state.party.members||[]).slice(), positionsSnapshot: { ...(state.party.positions||{}) }, turn: 1, turnStartProcessedFor: null, lastTarget: {} };
 }
@@ -170,7 +194,10 @@ export function performSkill(state, battleState, actor, sk){
   };
   const tryHitOnce = (fromId, attacker, toId, target, skill)=>{
     // hit check
-    let acc = clamp01(skill.acc ?? 1);
+    const rawAcc = clamp01(skill.acc ?? 1);
+    const addAcc = Math.max(0, skill.accAdd ?? 0);
+    // 기본: acc는 0~1, accAdd가 있을 경우 '평면 보정'으로 dodge와 상쇄
+    let acc = rawAcc;
     let dodge = clamp01(target.dodge||0);
     let block = clamp01(target.block||0);
     let crit = clamp01(attacker.crit||0);
@@ -180,14 +207,23 @@ export function performSkill(state, battleState, actor, sk){
     dodge = clamp01(mod.dodge ?? dodge);
     block = clamp01(mod.block ?? block);
     crit = clamp01(mod.crit ?? crit);
-    if(battleState.rng.next() > acc){
-      battleState.log.push({ type:'miss', from: fromId, to: toId, skill: skill.id, isMulti: (skill.hits||1)>1, hp: target.hp, shield: target.shield||0 });
-      return { missed:true, died:false };
-    }
-    // dodge
-    if(battleState.rng.next() < dodge){
-      battleState.log.push({ type:'miss', from: fromId, to: toId, skill: skill.id, isMulti: (skill.hits||1)>1 });
-      return { missed:true, died:false };
+    if(addAcc > 0){
+      // 평면 방식: 최종 명중 = clamp01(rawAcc + addAcc - dodge)
+      const finalAcc = clamp01(rawAcc + addAcc - dodge);
+      if(battleState.rng.next() > finalAcc){
+        battleState.log.push({ type:'miss', from: fromId, to: toId, skill: skill.id, isMulti: (skill.hits||1)>1, hp: target.hp, shield: target.shield||0 });
+        return { missed:true, died:false };
+      }
+    } else {
+      // 기존 방식: acc 판정 후 dodge 별도 판정 → 최종 acc*(1-dodge)
+      if(battleState.rng.next() > acc){
+        battleState.log.push({ type:'miss', from: fromId, to: toId, skill: skill.id, isMulti: (skill.hits||1)>1, hp: target.hp, shield: target.shield||0 });
+        return { missed:true, died:false };
+      }
+      if(battleState.rng.next() < dodge){
+        battleState.log.push({ type:'miss', from: fromId, to: toId, skill: skill.id, isMulti: (skill.hits||1)>1 });
+        return { missed:true, died:false };
+      }
     }
     // block / crit
     const blocked = battleState.rng.next() < block;

@@ -96,12 +96,14 @@ td,th{ border-bottom:1px solid #1f2530; padding:6px 8px; text-align:left; }
 .unit-slot .shieldbar{ width:100%; height:6px; background:#1f2530; border-radius:6px; overflow:hidden; margin-top:3px; }
 .unit-slot .shieldbar > span{ display:block; height:100%; background:#e6e6e6; }
 .unit-slot .hit-badge{ position:absolute; top:6px; left:6px; background:#0f1524; color:#e6e6e6; border:1px solid #2b3450; border-radius:6px; padding:2px 6px; font-size:11px; pointer-events:none; opacity:.95; }
+.unit-slot .hit-badge.low-hit{ color:#ff6b6b; border-color:#5a2a2a; }
 .unit-slot.impact{ animation: impactBoom .22s cubic-bezier(.1,2,.3,1), shakeHard .22s ease-out; }
 @keyframes impactBoom{ 0%{ box-shadow:0 0 0 0 rgba(255,255,255,.0) inset; transform: scale(1); } 40%{ box-shadow:0 0 0 80px rgba(255,255,255,.15) inset; transform: scale(1.05); } 100%{ box-shadow:0 0 0 0 rgba(255,255,255,.0) inset; transform: scale(1); } }
 @keyframes shakeHard{ 0%{ transform: translate(0,0);} 20%{ transform: translate(3px, -2px);} 40%{ transform: translate(-3px, 2px);} 60%{ transform: translate(3px, 1px);} 80%{ transform: translate(-2px, -1px);} 100%{ transform: translate(0,0);} }
 .unit-slot.is-turn{ outline:2px solid #5cc8ff; }
 .unit-slot .name-label{ position:absolute; top:-10px; left:50%; transform: translate(-50%, -100%); background:#0f1524; color:#cbd5e1; border:1px solid #2b3450; border-radius:8px; padding:4px 8px; font-size:12px; white-space:nowrap; box-shadow:0 6px 16px rgba(0,0,0,.4); opacity:0; pointer-events:none; transition: opacity .15s ease, transform .15s ease; }
 .unit-slot.is-turn .name-label{ opacity:1; transform: translate(-50%, -110%); }
+.unit-slot.is-target .name-label{ opacity:1; transform: translate(-50%, -110%); }
 .unit-slot.is-target{ outline:2px dashed #a0ff9e; }
 .unit-slot.is-eligible{ box-shadow:0 0 0 2px rgba(255,120,120,.38) inset; }
 .unit-slot.attacking{ outline:3px solid #ff3b3b; box-shadow:0 0 12px rgba(255,59,59,.5); }

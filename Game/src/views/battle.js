@@ -282,7 +282,8 @@ export function renderBattleView(root, state){
     if(!targetIds.length) return;
 
     // 각 대상에 대해 배지/예상 피해 세그먼트 표시
-    const baseAcc = Math.max(0, Math.min(1, (selectedSkill.acc||1)));
+    const rawAcc = Math.max(0, Math.min(1, (selectedSkill.acc||1)));
+    const addAcc = Math.max(0, selectedSkill.accAdd||0);
     const hits = Math.max(1, selectedSkill.hits||1);
     const lane = (selectedSkill.range==='ally') ? allyLane : enemyLane; // 대상 레인
     targetIds.forEach(tid=>{
@@ -306,8 +307,8 @@ export function renderBattleView(root, state){
       }catch(e){ /* fail-soft */ }
       const dodgeBase = Math.max(0, Math.min(1, (target.dodge||0)));
       const dodgeFinal = Math.max(0, Math.min(1, dodgeBase + addDodge));
-      const accFinal = baseAcc;
-      const finalHit = selectedSkill.type==='heal' ? 100 : Math.round(accFinal * (1 - dodgeFinal) * 100);
+      const accFinal = (addAcc>0) ? Math.max(0, Math.min(1, rawAcc + addAcc - dodgeFinal)) : (rawAcc * (1 - dodgeFinal));
+      const finalHit = selectedSkill.type==='heal' ? 100 : Math.round(accFinal * 100);
       // 피해 가감 패시브가 있는 경우 예상 피해에도 반영
       let expectedDamageMul = 1;
       try{
@@ -342,7 +343,7 @@ export function renderBattleView(root, state){
       }
       const slotEl = lane.querySelector(`.unit-slot[data-unit-id="${tid}"]`);
       if(!slotEl) return;
-      const badge = document.createElement('div'); badge.className='hit-badge'; badge.textContent = `${finalHit}%`;
+      const badge = document.createElement('div'); badge.className='hit-badge'; if(finalHit<=50) badge.classList.add('low-hit'); badge.textContent = `${finalHit}%`;
       slotEl.appendChild(badge);
       const pred = slotEl.querySelector('.hpbar .pred');
       if(pred){
@@ -372,7 +373,8 @@ export function renderBattleView(root, state){
       card.dataset.skillId = sk.id;
       const targetText = sk.type==='row' ? (Array.isArray(sk.to)&&sk.to.length===1? `전열 전체` : `선택 라인 전체`) : (sk.range==='melee'? '근접: 가장 앞열만' : sk.range==='ranged'? '원거리: 전체 선택 가능' : (sk.to? (sk.to.includes(1)? '전열' : '후열') : '대상: 전/후열'));
       const attr = sk.damageType ? ` · 속성: ${sk.damageType==='slash'?'참격': sk.damageType==='pierce'?'관통': sk.damageType==='magic'?'마법':'타격'}` : '';
-      const stats = `명중: ${Math.round((sk.acc||1)*100)}% · 대미지: ${Math.round((sk.coeff||1)*100)}% x ${sk.hits||1}${attr}`;
+      const accDisp = Math.round((((sk.acc||1) + Math.max(0, sk.accAdd||0)) * 100));
+      const stats = `명중: ${accDisp}% (+${Math.round((Math.max(0, sk.accAdd||0))*100)}%) · 대미지: ${Math.round((sk.coeff||1)*100)}% x ${sk.hits||1}${attr}`;
       const debuffLine = (()=>{
         const parts = [];
         if(sk.bleed){ parts.push(`50% 확률로 ${sk.bleed.duration||3}턴간 출혈 상태`); }
@@ -423,7 +425,13 @@ export function renderBattleView(root, state){
     refreshCardStates();
     updateAOEHighlight();
   }
-  renderCards();
+  if(B.allyOrder.includes(B.turnUnit)){
+    renderCards();
+  } else {
+    // 적 턴에는 카드 영역을 비운다
+    cardsEl.innerHTML='';
+    tabs.innerHTML='';
+  }
 
   // 슬롯 클릭 시 타겟 선택 유지/검증
   function enableSelect(laneEl, side){

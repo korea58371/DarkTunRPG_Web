@@ -1,0 +1,288 @@
+{
+  "main": {
+    "id": "df2ae339f64f5bc7",
+    "type": "split",
+    "children": [
+      {
+        "id": "958974b133e9e04c",
+        "type": "tabs",
+        "dimension": 65.54694229112835,
+        "children": [
+          {
+            "id": "6c4d9e47f26fc414",
+            "type": "leaf",
+            "state": {
+              "type": "markdown",
+              "state": {
+                "file": "다회차 플레이.md",
+                "mode": "source",
+                "source": false
+              },
+              "icon": "lucide-file",
+              "title": "다회차 플레이"
+            }
+          },
+          {
+            "id": "383e7eb64eeaaa5f",
+            "type": "leaf",
+            "state": {
+              "type": "markdown",
+              "state": {
+                "file": "등급.md",
+                "mode": "source",
+                "source": false
+              },
+              "icon": "lucide-file",
+              "title": "등급"
+            }
+          },
+          {
+            "id": "5dc42f359032ee67",
+            "type": "leaf",
+            "state": {
+              "type": "markdown",
+              "state": {
+                "file": "레벨.md",
+                "mode": "source",
+                "source": false
+              },
+              "icon": "lucide-file",
+              "title": "레벨"
+            }
+          },
+          {
+            "id": "b6a302151eb7040a",
+            "type": "leaf",
+            "state": {
+              "type": "markdown",
+              "state": {
+                "file": "GDD/시스템/[SYS] 부대 정비.md",
+                "mode": "source",
+                "source": false
+              },
+              "icon": "lucide-file",
+              "title": "[SYS] 부대 정비"
+            }
+          },
+          {
+            "id": "dc0c5b887d6c472f",
+            "type": "leaf",
+            "state": {
+              "type": "markdown",
+              "state": {
+                "file": "무제.md",
+                "mode": "source",
+                "source": false
+              },
+              "icon": "lucide-file",
+              "title": "무제"
+            }
+          }
+        ],
+        "currentTab": 4
+      },
+      {
+        "id": "fcfcb317a89657b4",
+        "type": "tabs",
+        "dimension": 34.45305770887167,
+        "children": [
+          {
+            "id": "af0add75797b7e5b",
+            "type": "leaf",
+            "state": {
+              "type": "graph",
+              "state": {},
+              "icon": "lucide-git-fork",
+              "title": "그래프 뷰"
+            }
+          }
+        ]
+      }
+    ],
+    "direction": "vertical"
+  },
+  "left": {
+    "id": "c36b94e35e48b0b2",
+    "type": "split",
+    "children": [
+      {
+        "id": "e6141a92449e8bba",
+        "type": "tabs",
+        "children": [
+          {
+            "id": "a14d4f686b457cdd",
+            "type": "leaf",
+            "state": {
+              "type": "file-explorer",
+              "state": {
+                "sortOrder": "alphabetical",
+                "autoReveal": false
+              },
+              "icon": "lucide-folder-closed",
+              "title": "파일 탐색기"
+            }
+          },
+          {
+            "id": "f007dd5b0fe881aa",
+            "type": "leaf",
+            "state": {
+              "type": "search",
+              "state": {
+                "query": "",
+                "matchingCase": false,
+                "explainSearch": false,
+                "collapseAll": false,
+                "extraContext": false,
+                "sortOrder": "alphabetical"
+              },
+              "icon": "lucide-search",
+              "title": "검색"
+            }
+          },
+          {
+            "id": "7d9d456998cb7b64",
+            "type": "leaf",
+            "state": {
+              "type": "bookmarks",
+              "state": {},
+              "icon": "lucide-bookmark",
+              "title": "북마크"
+            }
+          }
+        ]
+      }
+    ],
+    "direction": "horizontal",
+    "width": 300
+  },
+  "right": {
+    "id": "44d2e6bee5214cd5",
+    "type": "split",
+    "children": [
+      {
+        "id": "20308947ea2afbb3",
+        "type": "tabs",
+        "children": [
+          {
+            "id": "fa146e027396f88f",
+            "type": "leaf",
+            "state": {
+              "type": "backlink",
+              "state": {
+                "file": "무제.md",
+                "collapseAll": false,
+                "extraContext": false,
+                "sortOrder": "alphabetical",
+                "showSearch": false,
+                "searchQuery": "",
+                "backlinkCollapsed": false,
+                "unlinkedCollapsed": true
+              },
+              "icon": "links-coming-in",
+              "title": "무제 의 백링크"
+            }
+          },
+          {
+            "id": "c39f6c85f4827d61",
+            "type": "leaf",
+            "state": {
+              "type": "outgoing-link",
+              "state": {
+                "file": "무제.md",
+                "linksCollapsed": false,
+                "unlinkedCollapsed": true
+              },
+              "icon": "links-going-out",
+              "title": "무제 의 나가는 링크"
+            }
+          },
+          {
+            "id": "8a62b1a1f2f7f765",
+            "type": "leaf",
+            "state": {
+              "type": "tag",
+              "state": {
+                "sortOrder": "frequency",
+                "useHierarchy": true,
+                "showSearch": false,
+                "searchQuery": ""
+              },
+              "icon": "lucide-tags",
+              "title": "태그"
+            }
+          },
+          {
+            "id": "df077f21a0778310",
+            "type": "leaf",
+            "state": {
+              "type": "outline",
+              "state": {
+                "file": "무제.md",
+                "followCursor": false,
+                "showSearch": false,
+                "searchQuery": ""
+              },
+              "icon": "lucide-list",
+              "title": "무제 의 개요"
+            }
+          }
+        ]
+      }
+    ],
+    "direction": "horizontal",
+    "width": 300,
+    "collapsed": true
+  },
+  "left-ribbon": {
+    "hiddenItems": {
+      "switcher:빠른 전환기 열기": false,
+      "graph:그래프 뷰 열기": false,
+      "canvas:새 캔버스 만들기": false,
+      "daily-notes:오늘의 일일 노트 열기": false,
+      "templates:템플릿 삽입": false,
+      "command-palette:명령어 팔레트 열기": false,
+      "bases:새 베이스 생성하기": false
+    }
+  },
+  "active": "dc0c5b887d6c472f",
+  "lastOpenFiles": [
+    "레벨.md",
+    "다회차 플레이.md",
+    "무제.md",
+    "GDD/시스템/[SYS] 상태 지속.md",
+    "GDD/시스템/[SYS] 부대 정비.md",
+    "GDD/시스템/[SYS] 턴제 전투 시스템.md",
+    "GDD/데이터/[DATA] 데이터 모델 가이드.md",
+    "GDD/UX/[UX] 루트 선택 UI.md",
+    "GDD/콘텐츠/[CNT] 에피소드 타일.md",
+    "GDD/시스템/[SYS] 스토리 분기 시스템.md",
+    "위험색.md",
+    "등급.md",
+    "GDD/[IDX] 인덱스.md",
+    "Game/run.ps1",
+    "Game/run.bat",
+    "Game/index-standalone.html",
+    "Game/src/views/ui/tooltip.js",
+    "Game/src/views/ui",
+    "Game/src/engine/battleCore.js",
+    "Game/app.js",
+    "Thumbs.db",
+    "Game/README.md",
+    "Game/src/views/battle.js",
+    "Game/src/views/episode.js",
+    "루트 선택.md",
+    "스토리 분기.md",
+    "GDD/데이터/데이터 모델 가이드.md",
+    "GDD/시스템/상태 지속.md",
+    "GDD/시스템/부대 정비.md",
+    "GDD/시스템/턴제 전투 시스템.md",
+    "GDD/콘텐츠/에피소드 타일.md",
+    "GDD/UX/루트 선택 UI.md",
+    "GDD/시스템/스토리 분기 시스템.md",
+    "GDD/인덱스.md",
+    "상태 지속.md",
+    "전투 시스템.md",
+    "UI_스토리분기.png",
+    "Pasted image 20250908223604.png"
+  ]
+}

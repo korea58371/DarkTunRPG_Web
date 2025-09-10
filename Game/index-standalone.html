@@ -1,0 +1,32 @@
+<!doctype html>
+<html lang="ko">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Prototype RPG (Standalone)</title>
+    <link rel="stylesheet" href="styles.css" />
+  </head>
+  <body>
+    <header>
+      <h1>Prototype RPG</h1>
+      <nav>
+        <button data-view="routes">루트 선택</button>
+        <button data-view="party">부대 정비</button>
+        <button data-view="episode">에피소드</button>
+        <button data-view="battle">전투</button>
+      </nav>
+    </header>
+
+    <main id="app"></main>
+
+    <footer>
+      <small>Seed: <span id="seed"></span></small>
+    </footer>
+
+    <!-- 단일 번들 스크립트. 아래 경로의 파일을 먼저 생성해야 합니다. -->
+    <!-- esbuild 예: npx esbuild src/main.js --bundle --format=iife --global-name=App --outfile=standalone/app.bundle.js -->
+    <script src="standalone/app.bundle.js"></script>
+  </body>
+  </html>
+
+

@@ -102,6 +102,40 @@ export function pickTarget(state, battleState, isAlly, sk){
 }
 
 export function performSkill(state, battleState, actor, sk){
+  // helpers
+  const clamp01 = (v)=> Math.max(0, Math.min(1, Number.isFinite(v)? v : 0));
+  const calcBaseDamage = (attacker, target, skill)=>{
+    const coeff = Math.max(0, skill.coeff||0);
+    const atk = attacker.atk||1; const def = target.def||0;
+    return Math.max(1, Math.round((atk * coeff) - def));
+  };
+  const tryHitOnce = (fromId, attacker, toId, target, skill)=>{
+    // hit check
+    const acc = clamp01(skill.acc ?? 1);
+    if(battleState.rng.next() > acc){
+      battleState.log.push({ type:'miss', from: fromId, to: toId, skill: skill.id, isMulti: (skill.hits||1)>1, hp: target.hp, shield: target.shield||0 });
+      return { missed:true, died:false };
+    }
+    // dodge
+    const dodge = clamp01(target.dodge||0);
+    if(battleState.rng.next() < dodge){
+      battleState.log.push({ type:'miss', from: fromId, to: toId, skill: skill.id, isMulti: (skill.hits||1)>1 });
+      return { missed:true, died:false };
+    }
+    // block / crit
+    const blocked = battleState.rng.next() < clamp01(target.block||0);
+    const crit = battleState.rng.next() < clamp01(attacker.crit||0);
+    let dmg = calcBaseDamage(attacker, target, skill);
+    if(crit) dmg = Math.round(dmg * 1.5);
+    if(blocked) dmg = Math.max(1, Math.round(dmg * 0.2));
+    // apply shield then hp
+    let remaining = dmg;
+    if((target.shield||0) > 0){ const use = Math.min(target.shield, remaining); target.shield -= use; remaining -= use; }
+    target.hp -= remaining;
+    battleState.log.push({ type:'hit', from: fromId, to: toId, dmg, crit, blocked, skill: skill.id, isMulti: (skill.hits||1)>1, hp: target.hp, shield: target.shield||0 });
+    const died = target.hp<=0;
+    return { missed:false, died };
+  };
   const actorId = typeof actor === 'string' ? actor : actor.id;
   const actorUnit = typeof actor === 'string' ? battleState.units[actor] : actor;
   const isAlly = battleState.allyOrder.includes(actorId);
@@ -119,23 +153,8 @@ export function performSkill(state, battleState, actor, sk){
       const tUnit = battleState.units[tid];
       let died=false;
       for(let h=0; h<(sk.hits||1); h++){
-        if(battleState.rng.next() <= (sk.acc||1)){
-          // 회피
-          if(battleState.rng.next() < (tUnit.dodge||0)){ battleState.log.push({ type:'miss', from: actorId, to: tid, skill: sk.id, isMulti: false }); continue; }
-          const blocked = battleState.rng.next() < (tUnit.block||0);
-          const crit = battleState.rng.next() < (actorUnit.crit||0);
-          let dmg = Math.max(1, Math.round(((actorUnit.atk||1) * (sk.coeff||1)) - (tUnit.def||0)));
-          if(crit){ dmg = Math.round(dmg*1.5); }
-          if(blocked){ dmg = Math.max(1, Math.round(dmg*0.2)); }
-          // 실드 먼저 소모
-          let remaining = dmg;
-          if((tUnit.shield||0) > 0){ const use=Math.min(tUnit.shield, remaining); tUnit.shield-=use; remaining-=use; }
-          tUnit.hp -= remaining;
-          battleState.log.push({ type:'hit', from: actorId, to: tid, dmg, crit, blocked, skill: sk.id, isMulti: false, hp: tUnit.hp, shield: tUnit.shield||0 });
-          if(tUnit.hp<=0){ died=true; break; }
-        } else {
-          battleState.log.push({ type:'miss', from: actorId, to: tid, skill: sk.id, isMulti: false, hp: tUnit.hp, shield: tUnit.shield||0 });
-        }
+        const res = tryHitOnce(actorId, actorUnit, tid, tUnit, sk);
+        if(res.died){ died=true; break; }
       }
       if(died){
         const idx = pool.indexOf(tid); if(idx>-1) pool[idx]=null;
@@ -151,21 +170,8 @@ export function performSkill(state, battleState, actor, sk){
       const tUnit = battleState.units[tid];
       let died=false;
       for(let h=0; h<(sk.hits||1); h++){
-        if(battleState.rng.next() <= (sk.acc||1)){
-          if(battleState.rng.next() < (tUnit.dodge||0)){ battleState.log.push({ type:'miss', from: actorId, to: tid, skill: sk.id, isMulti: false }); continue; }
-          const blocked = battleState.rng.next() < (tUnit.block||0);
-          const crit = battleState.rng.next() < (actorUnit.crit||0);
-          let dmg = Math.max(1, Math.round(((actorUnit.atk||1) * (sk.coeff||1)) - (tUnit.def||0)));
-          if(crit){ dmg = Math.round(dmg*1.5); }
-          if(blocked){ dmg = Math.max(1, Math.round(dmg*0.2)); }
-          let remaining = dmg;
-          if((tUnit.shield||0) > 0){ const use=Math.min(tUnit.shield, remaining); tUnit.shield-=use; remaining-=use; }
-          tUnit.hp -= remaining;
-          battleState.log.push({ type:'hit', from: actorId, to: tid, dmg, crit, blocked, skill: sk.id, isMulti: false, hp: tUnit.hp, shield: tUnit.shield||0 });
-          if(tUnit.hp<=0){ died=true; break; }
-        } else {
-          battleState.log.push({ type:'miss', from: actorId, to: tid, skill: sk.id, isMulti: false, hp: tUnit.hp, shield: tUnit.shield||0 });
-        }
+        const res = tryHitOnce(actorId, actorUnit, tid, tUnit, sk);
+        if(res.died){ died=true; break; }
       }
       if(died){
         const idx = pool.indexOf(tid); if(idx>-1) pool[idx]=null;
@@ -202,30 +208,17 @@ export function performSkill(state, battleState, actor, sk){
   } else {
     const target = battleState.units[targetId];
     let died = false;
-    const multi = (sk.hits||1) > 1;
     for(let h=0; h<(sk.hits||1); h++){
-      if(battleState.rng.next() <= (sk.acc||1)){
-        if(battleState.rng.next() < (target.dodge||0)){ battleState.log.push({ type:'miss', from: actorId, to: targetId, skill: sk.id, isMulti: multi, hp: target.hp, shield: target.shield||0 }); continue; }
-        const blocked = battleState.rng.next() < (target.block||0);
-        const crit = battleState.rng.next() < (actorUnit.crit||0);
-        let dmg = Math.max(1, Math.round(((actorUnit.atk||1) * (sk.coeff||1)) - (target.def||0)));
-        if(crit) dmg = Math.round(dmg * 1.5);
-        if(blocked) dmg = Math.max(1, Math.round(dmg * 0.2));
-        let remaining = dmg;
-        if((target.shield||0) > 0){ const use = Math.min(target.shield, remaining); target.shield -= use; remaining -= use; }
-        target.hp -= remaining;
-        battleState.log.push({ type:'hit', from: actorId, to: targetId, dmg, crit, blocked, skill: sk.id, isMulti: multi, hp: target.hp, shield: target.shield||0 });
-        if(target.hp<=0){
-          died = true;
-          const idx = pool.indexOf(targetId); if(idx>-1) pool[idx]=null;
-          const qi = battleState.queue.indexOf(targetId); if(qi>-1) battleState.queue.splice(qi,1);
-          break;
-        }
-      } else {
-        battleState.log.push({ type:'miss', from: actorId, to: targetId, skill: sk.id, isMulti: multi, hp: target.hp, shield: target.shield||0 });
+      const res = tryHitOnce(actorId, actorUnit, targetId, target, sk);
+      if(res.died){
+        died = true; break;
       }
     }
-    if(died){ battleState.log.push({ type:'dead', to: targetId }); }
+    if(died){
+      const idx = pool.indexOf(targetId); if(idx>-1) pool[idx]=null;
+      const qi = battleState.queue.indexOf(targetId); if(qi>-1) battleState.queue.splice(qi,1);
+      battleState.log.push({ type:'dead', to: targetId });
+    }
   }
   // last action tracking removed per spec
   battleState.target = null;

@@ -1,5 +1,5 @@
 export function renderBattleView(root, state){
-  const btid = state.ui.battle || 'BT-010';
+  const btid = state.ui.battle || Object.keys(state.data.battles||{})[0] || 'BT-100';
   const bt = state.data.battles[btid];
   const frame = document.createElement('div');
   frame.className='battle-frame';

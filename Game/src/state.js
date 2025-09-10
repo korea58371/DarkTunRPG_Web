@@ -1,5 +1,5 @@
 import { createRng } from './util/rng.js';
-import { DATA } from './temp/data.js';
+import { DATA } from './data/index.js';
 
 export function initState(){
   const rng = createRng(12345);

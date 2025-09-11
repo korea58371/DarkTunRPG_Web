@@ -719,12 +719,49 @@ export function renderBattleView(root, state){
         state.persist.hp[baseId] = u.hp;
         state.persist.mp[baseId] = u.mp;
       });
+      // 영구 사망 처리: 이번 전투에서 죽은 아군 제거
+      if(B.deadAllies && B.deadAllies.length){
+        const deadSet = new Set(B.deadAllies);
+        if(state.ownedUnits){ Object.keys(state.ownedUnits).forEach(id=>{ if(deadSet.has(id)) delete state.ownedUnits[id]; }); }
+        if(Array.isArray(state.party?.members)){
+          state.party.members = state.party.members.map(id=> (id && deadSet.has(id)? null : id));
+        }
+        if(state.party?.positions){ Object.keys(state.party.positions).forEach(id=>{ if(deadSet.has(id)) delete state.party.positions[id]; }); }
+      }
       // 전투 결과 플래그 기록(분기용)
       const key = `bt.${B.id||'BT-010'}.win`; // B.id가 없다면 기본값
       state.flags[key] = isWin;
       delete state.ui.battleState;
       // 승패에 맞는 다음 루트로 이동 시도
       const nextRoute = isWin ? 'R-011' : 'R-012';
+      const curBid = B.id || 'BT-010';
+      // 전투 데이터 기반 분기: winNext/loseNext가 있으면 해당 타겟으로 이동
+      const btData = state.data?.battles?.[curBid];
+      const nextId = isWin ? (btData?.winNext || null) : (btData?.loseNext || null);
+      // 이번 전투에서 사망한 아군은 보유/덱/영구 데이터에서 제거
+      if(B.deadAllies && B.deadAllies.length){
+        const deadSet = new Set(B.deadAllies);
+        if(state.ownedUnits){ Object.keys(state.ownedUnits).forEach(id=>{ if(deadSet.has(id)) delete state.ownedUnits[id]; }); }
+        if(Array.isArray(state.party?.members)){
+          state.party.members = state.party.members.map(id=> (id && deadSet.has(id)? null : id));
+        }
+        if(state.party?.positions){ Object.keys(state.party.positions).forEach(id=>{ if(deadSet.has(id)) delete state.party.positions[id]; }); }
+        if(state.persist){
+          if(state.persist.hp){ Object.keys(state.persist.hp).forEach(id=>{ if(deadSet.has(id)) delete state.persist.hp[id]; }); }
+          if(state.persist.mp){ Object.keys(state.persist.mp).forEach(id=>{ if(deadSet.has(id)) delete state.persist.mp[id]; }); }
+        }
+      }
+      // EP로 이동하는 경우: 그 EP로 이어지는 루트를 자동 방문 처리(재선택 방지)
+      if(nextId && nextId.startsWith('EP-')){
+        const r = (state.data.routes||[]).find(rt=>rt.next===nextId);
+        if(r){ if(!state.flags.visitedRoutes) state.flags.visitedRoutes={}; state.flags.visitedRoutes[r.id]=true; }
+      }
+      if(nextId){
+        delete state.ui.battle; state.ui.currentEpisode = nextId;
+        const btnEp = document.querySelector('nav button[data-view=episode]');
+        if(btnEp){ btnEp.click(); return; }
+      }
+      // EP-220 처리는 episode 화면에서 resetState가 수행됨
       state.ui.currentEpisode = null; state.ui.battle = null;
       const btn = document.querySelector('nav button[data-view=routes]');
       if(btn){ btn.click(); }

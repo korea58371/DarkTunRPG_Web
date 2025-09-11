@@ -27,6 +27,20 @@ export function renderEpisodeView(root, state){
       const effects = c.effects||[];
       const join = effects.find(e=>e.type==='party.add');
       applyEffects(state, effects);
+      // 배드엔딩: EP-220 → 종료 후 타이틀 복귀
+      if(state.ui.currentEpisode==='EP-220'){
+        const backdrop = document.createElement('div'); backdrop.className='modal-backdrop';
+        const modal = document.createElement('div'); modal.className='modal';
+        modal.innerHTML = `<h3>게임 오버</h3><p>타이틀 화면으로 돌아갑니다.</p><div class="actions"><button class="btn" id="goTitle">확인</button></div>`;
+        backdrop.appendChild(modal); document.body.appendChild(backdrop);
+        modal.querySelector('#goTitle').onclick=()=>{
+          backdrop.remove();
+          // 완전 초기화 및 타이틀로
+          if(typeof window.resetState==='function'){ window.resetState(); return; }
+          document.querySelector('nav button[data-view=title]')?.click();
+        };
+        return;
+      }
       if(join){
         // show join modal
         const unit = state.data.units[join.unit];
@@ -58,6 +72,8 @@ export function renderEpisodeView(root, state){
         if(route){
           if(!state.flags.visitedRoutes) state.flags.visitedRoutes={};
           state.flags.visitedRoutes[route.id]=true;
+          // EP 완료 플래그(재합류 OR 조건용)
+          if(id==='EP-210'){ state.flags['ep.EP-210.done'] = true; }
           if(route.next?.startsWith('EP-')){ state.ui.currentEpisode=route.next; (window.render? window.render('episode') : document.querySelector('nav button[data-view=episode]')?.click()); return; }
           if(route.next?.startsWith('BT-')){ state.ui.battle=route.next; (window.render? window.render('battle') : document.querySelector('nav button[data-view=battle]')?.click()); return; }
         }

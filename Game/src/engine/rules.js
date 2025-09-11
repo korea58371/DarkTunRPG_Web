@@ -1,5 +1,9 @@
 export function checkRequirements(state, reqs){
   return (reqs||[]).every(r=>{
+    if(Array.isArray(r.anyOf)){
+      // OR: anyOf 중 하나라도 충족하면 true
+      return r.anyOf.some(sub=> checkRequirements(state, [sub]));
+    }
     if(r.type==='flag'){
       const has = Object.prototype.hasOwnProperty.call(state.flags, r.key);
       if(!has) return false; // 플래그가 아직 세팅되지 않으면 미충족

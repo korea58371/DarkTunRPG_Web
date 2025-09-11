@@ -7,7 +7,7 @@ export const BATTLES = {
     { unit:'E-301', row:1, col:2 }, // 전열 우
     'E-102',
     'E-103'
-  ], seed:67890 },
+  ], seed:67890, winNext:'EP-300', loseNext:'EP-205' },
   // 보스전: 거대 해골(임시 한 칸 데이터; 2칸 규칙은 별도 설계 필요)
   'BT-400': { id:'BT-400', enemy:['E-201'], seed:98765 }
 };

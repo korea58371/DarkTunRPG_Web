@@ -71,7 +71,7 @@ export function createBattleState(state, battle){
     }
   }
   const turnUnit = queue[0];
-  return { allyOrder, enemyOrder, queue, turnUnit, target:null, units, winner:null, rng: state.rng, log: [], id: battle?.id, battle, partySnapshot: (state.party.members||[]).slice(), positionsSnapshot: { ...(state.party.positions||{}) }, turn: 1, turnStartProcessedFor: null, lastTarget: {} };
+  return { allyOrder, enemyOrder, queue, turnUnit, target:null, units, winner:null, rng: state.rng, log: [], id: battle?.id, battle, partySnapshot: (state.party.members||[]).slice(), positionsSnapshot: { ...(state.party.positions||{}) }, turn: 1, turnStartProcessedFor: null, lastTarget: {}, deadAllies: [] };
 }
 
 export function pickTarget(state, battleState, isAlly, sk){
@@ -266,6 +266,7 @@ export function performSkill(state, battleState, actor, sk){
         const idx = pool.indexOf(tid); if(idx>-1) pool[idx]=null;
         const qi = battleState.queue.indexOf(tid); if(qi>-1) battleState.queue.splice(qi,1);
         battleState.log.push({ type:'dead', to: tid });
+        if(battleState.allyOrder.includes(tid)) battleState.deadAllies.push(tid.split('@')[0]);
       }
     });
   } else if(sk.type==='line'){
@@ -283,6 +284,7 @@ export function performSkill(state, battleState, actor, sk){
         const idx = pool.indexOf(tid); if(idx>-1) pool[idx]=null;
         const qi = battleState.queue.indexOf(tid); if(qi>-1) battleState.queue.splice(qi,1);
         battleState.log.push({ type:'dead', to: tid });
+        if(battleState.allyOrder.includes(tid)) battleState.deadAllies.push(tid.split('@')[0]);
       }
     });
   } else if(sk.type==='shield'){
@@ -327,6 +329,7 @@ export function performSkill(state, battleState, actor, sk){
           const idx = pool.indexOf(targetId); if(idx>-1) pool[idx]=null;
           const qi = battleState.queue.indexOf(targetId); if(qi>-1) battleState.queue.splice(qi,1);
           battleState.log.push({ type:'dead', to: targetId });
+          if(battleState.allyOrder.includes(targetId)) battleState.deadAllies.push(targetId.split('@')[0]);
         }
       }
       // 중독 부여: on-hit 또는 always 조건 충족 시 적용. 중첩 대신 갱신
@@ -352,6 +355,7 @@ export function performSkill(state, battleState, actor, sk){
       const idx = pool.indexOf(targetId); if(idx>-1) pool[idx]=null;
       const qi = battleState.queue.indexOf(targetId); if(qi>-1) battleState.queue.splice(qi,1);
       battleState.log.push({ type:'dead', to: targetId });
+      if(battleState.allyOrder.includes(targetId)) battleState.deadAllies.push(targetId.split('@')[0]);
     }
     // 출혈 부여(스킬 메타에 존재할 경우): "적중 시" 확률로 적용
     if(anyHit && !died && sk.bleed && target && (battleState.rng.next() < Math.max(0, Math.min(1, sk.bleed.chance||0)))){
@@ -390,6 +394,7 @@ export function applyTurnStartEffects(battleState){
       const idx = pool.indexOf(u.id); if(idx>-1) pool[idx] = null;
       const qi = battleState.queue.indexOf(u.id); if(qi>-1) battleState.queue.splice(qi,1);
       battleState.log.push({ type:'dead', to: u.id });
+      if(battleState.allyOrder.includes(u.id)) battleState.deadAllies.push(u.id.split('@')[0]);
       // 다음 턴 유닛 갱신
       battleState.turnUnit = battleState.queue[0] || null;
       return; // regen 등 이후 효과는 적용하지 않음
@@ -411,6 +416,7 @@ export function applyTurnStartEffects(battleState){
       const idx = pool.indexOf(u.id); if(idx>-1) pool[idx] = null;
       const qi = battleState.queue.indexOf(u.id); if(qi>-1) battleState.queue.splice(qi,1);
       battleState.log.push({ type:'dead', to: u.id });
+      if(battleState.allyOrder.includes(u.id)) battleState.deadAllies.push(u.id.split('@')[0]);
       battleState.turnUnit = battleState.queue[0] || null;
       return;
     }

@@ -104,6 +104,8 @@ export function renderPartyView(root, state){
         const data = JSON.parse(e.dataTransfer.getData('text/plain')||'{}');
         if(data.type==='unit' && data.id){
           if(state.party.members.includes(data.id)) return; // duplicate guard
+          // 영구 사망 캐릭터 방지: 보유 중인지 최종 확인
+          if(!state.ownedUnits?.[data.id]){ alert('해당 동료는 사용할 수 없습니다(사망/미보유).'); return; }
           // place into this slot
           state.party.members[idx] = data.id; state.party.positions[data.id]=r; renderPartyView(root, state);
         } else if(data.type==='slot' && typeof data.index==='number'){

@@ -38,33 +38,47 @@ export function renderRoutesView(root, state){
   // build graph and layout
   const graph = buildGraph(state);
   const layoutSize = { width:2000, height:1100 };
-  const nodes = layoutRightHierarchical(graph, layoutSize);
+  const nodes = layoutRightHierarchical(graph, layoutSize, null);
   const edges = graph.edges;
 
-  // determine current route id safely
-  const unlocked = state.data.routes.filter(r=>checkRequirements(state, r.requirements));
-  const startId = state.data.routes[0]?.id;
-  // prefer start node when 처음 진입(visited 없음), otherwise last unlocked
-  const curId = ((state.flags?.visitedRoutes && Object.keys(state.flags.visitedRoutes).some(k=>state.flags.visitedRoutes[k]))
-    ? ((unlocked.length ? unlocked[unlocked.length-1].id : startId) || nodes[0]?.id || null)
-    : (startId || nodes[0]?.id || null));
-
-  // visibility sets
-  // visibility sets
-  // startId already defined above
+  // determine current route id: 마지막으로 방문한 루트가 있으면 그 노드를, 아니면 첫 루트/다음 해금 루트를 선택
   const visitedMap = state.flags?.visitedRoutes || {};
-  const visitedIds = new Set(Object.keys(visitedMap).filter(k=>visitedMap[k]));
-  const baseVisible = visitedIds.size>0 ? new Set(visitedIds) : new Set(startId ? [startId] : []);
+  const visitedIdsArr = Object.keys(visitedMap).filter(k=>visitedMap[k]);
+  const visitedSet = new Set(visitedIdsArr);
+  const startId = state.data.routes[0]?.id;
+  const lastVisitedIdx = Math.max(-1, ...state.data.routes.map((r,i)=> visitedMap[r.id] ? i : -1));
+  // 포커스 대상: 마지막 방문의 '다음' 루트가 존재하고 접근 가능하면 그 노드, 아니면 마지막 방문 노드
+  let curId = null;
+  if(lastVisitedIdx>=0){
+    const last = state.data.routes[lastVisitedIdx];
+    const nextId = (last.next && last.next.startsWith('R-')) ? last.next : null;
+    const nextOk = nextId ? checkRequirements(state, state.data.routes.find(r=>r.id===nextId)?.requirements) : false;
+    curId = (nextOk ? nextId : last.id);
+  } else {
+    curId = (state.data.routes.find(r=>checkRequirements(state, r.requirements))?.id || startId || nodes[0]?.id || null);
+  }
+
+  // 가시성: 시작 노드 + 방문한 노드 + 방문한 노드에서 한 단계 나간 다음 노드만 표시
+  const baseVisible = visitedIdsArr.length>0 ? new Set(visitedIdsArr) : new Set(startId ? [startId] : []);
   const nextIds = new Set();
   edges.forEach(e=>{ if(baseVisible.has(e.from)) nextIds.add(e.to); });
-  const isVisible = (id)=> visitedIds.has(id) || (visitedIds.size===0 && id===startId) || (visitedIds.size>0 && nextIds.has(id));
+  const isVisible = (id)=>{
+    if(visitedIdsArr.length===0) return id===startId; // 처음 시작: 시작 노드만
+    return baseVisible.has(id) || nextIds.has(id);
+  };
 
-  // initialize view from persisted or center on current node
+  // always center on current node when 열람 (지속 뷰 대신 항상 포커스)
   const currentNode = nodes.find(n=>curId && n.id===curId) || nodes[0];
-  if(state.ui?.routesView){
-    view = { ...state.ui.routesView };
-  } else if(currentNode){
-    const zoomW = 900, zoomH = 540;
+  // World bounds 계산(노드 배치 기준)
+  const minX = Math.min(...nodes.map(n=>n.x-80), 0);
+  const minY = Math.min(...nodes.map(n=>n.y-30), 0);
+  const maxX = Math.max(...nodes.map(n=>n.x+80), 1200);
+  const maxY = Math.max(...nodes.map(n=>n.y+30), 600);
+  const W = Math.ceil(maxX - Math.min(minX,0) + 200);
+  const H = Math.ceil(maxY - Math.min(minY,0) + 200);
+  if(currentNode){
+    const zoomW = Math.min(900, W);
+    const zoomH = Math.min(540, H);
     const x = Math.max(0, Math.round(currentNode.x - zoomW/2));
     const y = Math.max(0, Math.round(currentNode.y - zoomH/2));
     view = { x, y, w: zoomW, h: zoomH };
@@ -72,13 +86,32 @@ export function renderRoutesView(root, state){
   svg.setAttribute('viewBox',`${view.x} ${view.y} ${view.w} ${view.h}`);
 
   // edges (only visible)
+  const mkRoundedPath=(ax,ay,bx,by)=>{
+    const startX = ax+80, startY = ay;
+    const endX = bx-80, endY = by;
+    if(startY===endY){
+      return `M${startX},${startY} L${endX},${endY}`;
+    }
+    const span = Math.max(0, endX - startX);
+    const dx = Math.max(60, Math.min(140, Math.floor(span/4)));
+    const r = 12;
+    const x1 = startX + dx; // vertical rail
+    const dirDown = endY > startY;
+    const arcSweep1 = dirDown ? 1 : 0; // 첫 코너: H→V
+    const arcSweep2 = dirDown ? 0 : 1; // 둘째 코너: V→H
+    const yCorner1 = startY + (dirDown ? r : -r);
+    const yCorner2 = endY - (dirDown ? r : -r);
+    // 경로: H → ARC → V → ARC → H (한 레일에서만 꺾음)
+    return `M${startX},${startY} H${x1-r} A${r},${r} 0 0 ${arcSweep1} ${x1},${yCorner1} `+
+           `V${yCorner2} A${r},${r} 0 0 ${arcSweep2} ${x1+r},${endY} H${endX}`;
+  };
   edges.forEach(e=>{
     const a = nodes.find(n=>n.id===e.from);
     const b = nodes.find(n=>n.id===e.to);
     if(!a||!b) return;
     if(!isVisible(a.id) || !isVisible(b.id)) return;
     const path = document.createElementNS('http://www.w3.org/2000/svg','path');
-    path.setAttribute('d',`M${a.x+80},${a.y} C ${a.x+180},${a.y} ${b.x-180},${b.y} ${b.x-80},${b.y}`);
+    path.setAttribute('d', mkRoundedPath(a.x, a.y, b.x, b.y));
     path.setAttribute('class','edge');
     content.appendChild(path);
   });
@@ -87,9 +120,9 @@ export function renderRoutesView(root, state){
   nodes.forEach(n=>{
     const r = state.data.routes.find(r=>r.id===n.id);
     const ok = checkRequirements(state, r.requirements);
-    const visited = visitedIds.has(r.id);
+    const visited = visitedSet.has(r.id);
     if(!isVisible(r.id)) return; // 숨김 정책
-    const obf = !visited && nextIds.has(r.id) && !ok; // 선택 가능 노드는 제목 표시
+    const obf = (!visited && nextIds.has(r.id) && !ok);
     const g = document.createElementNS('http://www.w3.org/2000/svg','g');
     g.setAttribute('transform',`translate(${n.x-80},${n.y-30})`);
     const rect = document.createElementNS('http://www.w3.org/2000/svg','rect');
@@ -99,7 +132,8 @@ export function renderRoutesView(root, state){
     const label = document.createElementNS('http://www.w3.org/2000/svg','text');
     label.setAttribute('x','80'); label.setAttribute('y','35'); label.setAttribute('text-anchor','middle');
     label.setAttribute('class','node-label');
-    label.textContent = (visited || ok) ? n.title : '???';
+    const isBattle = (r.next||'').startsWith('BT-');
+    label.textContent = (visited || ok) ? (isBattle ? '⚔ ' + n.title : n.title) : '???';
     g.appendChild(rect); g.appendChild(label);
     g.style.cursor = clickable ? 'pointer' : 'not-allowed';
     g.addEventListener('click',()=>{
@@ -120,13 +154,13 @@ export function renderRoutesView(root, state){
   // minimap
   const mini = frame.querySelector('.mini');
   const miniSvg = document.createElementNS('http://www.w3.org/2000/svg','svg');
-  miniSvg.setAttribute('viewBox','0 0 2000 1200');
+  miniSvg.setAttribute('viewBox',`0 0 ${W} ${H}`);
   mini.appendChild(miniSvg);
   edges.forEach(e=>{
     const a = nodes.find(n=>n.id===e.from); const b = nodes.find(n=>n.id===e.to);
     if(!a||!b) return;
     const p = document.createElementNS('http://www.w3.org/2000/svg','path');
-    p.setAttribute('d',`M${a.x+80},${a.y} C ${a.x+180},${a.y} ${b.x-180},${b.y} ${b.x-80},${b.y}`);
+    p.setAttribute('d', mkRoundedPath(a.x, a.y, b.x, b.y));
     p.setAttribute('class','edge'); miniSvg.appendChild(p);
   });
   nodes.forEach(n=>{
@@ -140,11 +174,10 @@ export function renderRoutesView(root, state){
   function updateView(v){
     view=v; svg.setAttribute('viewBox',`${v.x} ${v.y} ${v.w} ${v.h}`);
     vp.setAttribute('x', v.x); vp.setAttribute('y', v.y); vp.setAttribute('width', v.w); vp.setAttribute('height', v.h);
-    if(!state.ui) state.ui = {}; state.ui.routesView = { ...v };
   }
 
-  enablePanZoom(canvas, svg, view, updateView);
-  enableMiniDrag(miniSvg, view, updateView);
+  enablePanZoom(canvas, svg, view, updateView, { W, H });
+  enableMiniDrag(miniSvg, view, updateView, { W, H });
 
   frame.querySelector('#btnParty').onclick=()=>document.querySelector('nav button[data-view=party]')?.click();
   frame.querySelector('#btnStart').onclick=()=>{
@@ -163,35 +196,74 @@ export function renderRoutesView(root, state){
 function buildGraph(state){
   const nodes = state.data.routes.map(r=>({ id:r.id, title:r.title, summary:r.summary, requirements:r.requirements, next:r.next, branches:r.branches||[] }));
   const edges = [];
+  // 분기 엣지
   nodes.forEach(r=>{ (r.branches||[]).forEach(b=>{ if(b.to?.startsWith('R-')) edges.push({ from:r.id, to:b.to, label:b.label||'' }); }); });
-  for(let i=0;i<nodes.length-1;i++){ const from = nodes[i].id, to = nodes[i+1].id; edges.push({ from, to, label: nodes[i].branches?.length? '' : '진행' }); }
+  // 메인 진행 엣지: 실제 next가 루트(R-***)일 때만 연결
+  nodes.forEach(r=>{ if((r.next||'').startsWith('R-')) edges.push({ from:r.id, to:r.next, label:'진행' }); });
   return { nodes, edges };
 }
 
-function layoutRightHierarchical(graph, size){
-  const levelMap = new Map();
-  const indeg = new Map(graph.nodes.map(n=>[n.id,0]));
-  graph.edges.forEach(e=>indeg.set(e.to, (indeg.get(e.to)||0)+1));
-  const roots = graph.nodes.filter(n=>(indeg.get(n.id)||0)===0);
-  const queue = roots.map(r=>({ id:r.id, depth:0 }));
-  const visited = new Set();
-  while(queue.length){
-    const cur = queue.shift(); if(visited.has(cur.id)) continue; visited.add(cur.id);
-    levelMap.set(cur.id, cur.depth);
-    graph.edges.filter(e=>e.from===cur.id).forEach(e=>queue.push({ id:e.to, depth:cur.depth+1 }));
+function layoutRightHierarchical(graph, size, anchorId){
+  const width = size?.width||2000, height=size?.height||1100;
+  const xGap = 260, yGap = 140; // 기본 간격
+  const nodesById = Object.fromEntries(graph.nodes.map(n=>[n.id,n]));
+  const nextsByFrom = graph.edges.reduce((m,e)=>{ (m[e.from] ||= []).push(e.to); return m; },{});
+  // 1) 메인 스파인 계산(R-001부터 next 체인)
+  const start = anchorId || graph.nodes[0]?.id;
+  const main = []; const seen = new Set(); let cur = start;
+  while(cur && !seen.has(cur)){
+    seen.add(cur); main.push(cur);
+    const r = nodesById[cur];
+    const nx = (r?.next||'').startsWith('R-') ? r.next : null;
+    cur = nx;
   }
-  const grouped = {}; graph.nodes.forEach(n=>{ const d=levelMap.get(n.id)||0; (grouped[d] ||= []).push(n); });
-  const width = size?.width||2000, height=size?.height||1100; const depths = Object.keys(grouped).map(Number).sort((a,b)=>a-b);
-  const colGap = Math.max(260, Math.min(360, (width-200)/Math.max(1,depths.length)));
-  const out=[]; depths.forEach((depth,di)=>{
-    const arr = grouped[depth]; const rowGap = Math.max(110, Math.min(200, (height-200)/Math.max(1,arr.length)));
-    arr.forEach((n,i)=> out.push({ id:n.id, title:n.title, x:140+di*colGap, y:160+i*rowGap }));
-  }); return out;
+  // 2) X 좌표: 메인은 순서대로, 브랜치는 parentX+1
+  const xOf = new Map(main.map((id,i)=>[id, 140 + i*xGap]));
+  const assignX = (id)=>{
+    if(xOf.has(id)) return xOf.get(id);
+    const parents = Object.keys(nextsByFrom).filter(k=> (nextsByFrom[k]||[]).includes(id));
+    const px = parents.length? (assignX(parents[0]) + xGap) : 140; // 재결합은 첫 부모 기준
+    xOf.set(id, px); return px;
+  };
+  graph.nodes.forEach(n=> assignX(n.id));
+  // 2-1) 단조 증가 보정: 모든 엣지에 대해 childX >= parentX + xGap 유지
+  const outs = nextsByFrom;
+  const shiftRight=(id,delta)=>{
+    const curX = xOf.get(id)||140; const nx = curX + delta; if(nx<=curX) return;
+    xOf.set(id, nx); (outs[id]||[]).forEach(to=>{
+      const need = xOf.get(id) + xGap - (xOf.get(to)||140);
+      if(need>0) shiftRight(to, need);
+    });
+  };
+  graph.edges.forEach(e=>{ const need = (xOf.get(e.from)||140) + xGap - (xOf.get(e.to)||140); if(need>0) shiftRight(e.to, need); });
+  // 3) Y 좌표: 부모-자식 군집으로 DFS 배치
+  const roots = [start];
+  const yOf = new Map(); let cursorY = 160;
+  const dfs=(id)=>{
+    const kids = (nextsByFrom[id]||[]).filter(c=> c!==id);
+    if(kids.length===0){ const y=cursorY; yOf.set(id,y); cursorY+=yGap; return y; }
+    const ys = kids.map(dfs);
+    const mid = Math.floor((Math.min(...ys)+Math.max(...ys))/2);
+    yOf.set(id, mid); return mid;
+  };
+  roots.forEach(dfs);
+  // 4) 나머지(재결합 등) 노드 Y 스냅: 최초 부모들의 중간으로
+  graph.nodes.forEach(n=>{
+    if(!yOf.has(n.id)){
+      const parents = Object.keys(nextsByFrom).filter(k=> (nextsByFrom[k]||[]).includes(n.id));
+      const ys = parents.map(p=> yOf.get(p)).filter(v=> typeof v==='number');
+      const y = ys.length? Math.floor(ys.reduce((a,b)=>a+b,0)/ys.length) : cursorY;
+      if(!ys.length) cursorY+=yGap;
+      yOf.set(n.id, y);
+    }
+  });
+  // 5) 결과
+  return graph.nodes.map(n=>({ id:n.id, title:n.title, x:xOf.get(n.id), y:yOf.get(n.id) }));
 }
 
-function enablePanZoom(container, svg, view, onChange){
+function enablePanZoom(container, svg, view, onChange, bounds){
   let isPanning=false, start={x:0,y:0};
-  const W=2000, H=1200;
+  const W=bounds?.W||2000, H=bounds?.H||1200;
   const clamp=(v,min,max)=> Math.max(min, Math.min(max, v));
   const threshold=4; let panActive=false;
   container.classList.add('grab');
@@ -218,8 +290,8 @@ function enablePanZoom(container, svg, view, onChange){
   container.addEventListener('wheel', wheelHandler, { passive:false });
 }
 
-function enableMiniDrag(miniSvg, view, onChange){
-  let dragging=false; const W=2000, H=1200;
+function enableMiniDrag(miniSvg, view, onChange, bounds){
+  let dragging=false; const W=bounds?.W||2000, H=bounds?.H||1200;
   miniSvg.addEventListener('mousedown',e=>{ dragging=true; move(e); });
   window.addEventListener('mouseup',()=> dragging=false);
   miniSvg.addEventListener('mousemove',e=>{ if(dragging) move(e); });

@@ -6,7 +6,7 @@
       {
         "id": "958974b133e9e04c",
         "type": "tabs",
-        "dimension": 65.54694229112833,
+        "dimension": 72.0216606498195,
         "children": [
           {
             "id": "6c4d9e47f26fc414",
@@ -70,12 +70,12 @@
             "state": {
               "type": "markdown",
               "state": {
-                "file": "GDD/시스템/[SYS] 턴제 전투 시스템.md",
+                "file": "GDD/시스템/[SYS] 스토리 분기 시스템.md",
                 "mode": "source",
                 "source": false
               },
               "icon": "lucide-file",
-              "title": "[SYS] 턴제 전투 시스템"
+              "title": "[SYS] 스토리 분기 시스템"
             }
           },
           {
@@ -98,7 +98,7 @@
       {
         "id": "fcfcb317a89657b4",
         "type": "tabs",
-        "dimension": 34.45305770887167,
+        "dimension": 27.978339350180505,
         "children": [
           {
             "id": "af0add75797b7e5b",
@@ -260,6 +260,7 @@
   },
   "active": "dc0c5b887d6c472f",
   "lastOpenFiles": [
+    "GDD/시스템/[SYS] 턴제 전투 시스템.md",
     "Game/src/views/title.js",
     "GDD/콘텐츠/[CNT] 에피소드 타일.md",
     "다회차 플레이.md",
@@ -267,7 +268,6 @@
     "GDD/데이터/[DATA] 데이터 모델 가이드.md",
     "GDD/시스템/[SYS] 부대 정비.md",
     "GDD/시스템/[SYS] 스토리 분기 시스템.md",
-    "GDD/시스템/[SYS] 턴제 전투 시스템.md",
     "GDD/시스템/[SYS] 전투 - UI.md",
     "GDD/시스템/[SYS] 전투 - 턴과 행동.md",
     "GDD/시스템/[SYS] 전투 - 타겟팅과 범위.md",
@@ -294,7 +294,6 @@
     "Game/src/data",
     "GDD/UX/[UX] 루트 선택 UI.md",
     "GDD/[IDX] 인덱스.md",
-    "Game/run.ps1",
     "Game/README.md",
     "루트 선택.md",
     "Pasted image 20250908223604.png"

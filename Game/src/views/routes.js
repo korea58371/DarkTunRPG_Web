@@ -86,16 +86,23 @@ export function renderRoutesView(root, state){
   svg.setAttribute('viewBox',`${view.x} ${view.y} ${view.w} ${view.h}`);
 
   // edges (only visible)
-  const mkRoundedPath=(ax,ay,bx,by)=>{
+  // build obstacle rects (visible nodes only)
+  const obstacles = nodes.filter(n=> isVisible(n.id))
+    .map(n=>({ id:n.id, x1:n.x-80, x2:n.x+80, y1:n.y-30, y2:n.y+30 }));
+
+  const mkRoundedPath=(ax,ay,bx,by, excludeIds=[])=>{
     const startX = ax+80, startY = ay;
     const endX = bx-80, endY = by;
     if(startY===endY){
       return `M${startX},${startY} L${endX},${endY}`;
     }
     const span = Math.max(0, endX - startX);
-    const dx = Math.max(60, Math.min(140, Math.floor(span/4)));
-    const r = 12;
-    const x1 = startX + dx; // vertical rail
+    const r = 12, baseDX = 80, minDX = 60, margin = 16;
+    // ① 세로 구간과 겹치는 장애물 우측 끝 + 여백의 최댓값으로 레일 위치 선정
+    const yMinAll = Math.min(startY, endY) + r, yMaxAll = Math.max(startY, endY) - r;
+    const blockers = obstacles.filter(o=> !excludeIds.includes(o.id) && !(yMaxAll < o.y1 - margin || yMinAll > o.y2 + margin) && (o.x2 >= startX));
+    let x1 = Math.max(startX + baseDX, ...(blockers.map(b=> b.x2 + margin)));
+    x1 = Math.min(x1, endX - minDX);
     const dirDown = endY > startY;
     const arcSweep1 = dirDown ? 1 : 0; // 첫 코너: H→V
     const arcSweep2 = dirDown ? 0 : 1; // 둘째 코너: V→H
@@ -111,7 +118,7 @@ export function renderRoutesView(root, state){
     if(!a||!b) return;
     if(!isVisible(a.id) || !isVisible(b.id)) return;
     const path = document.createElementNS('http://www.w3.org/2000/svg','path');
-    path.setAttribute('d', mkRoundedPath(a.x, a.y, b.x, b.y));
+    path.setAttribute('d', mkRoundedPath(a.x, a.y, b.x, b.y, [a.id,b.id]));
     path.setAttribute('class','edge');
     content.appendChild(path);
   });
@@ -160,7 +167,7 @@ export function renderRoutesView(root, state){
     const a = nodes.find(n=>n.id===e.from); const b = nodes.find(n=>n.id===e.to);
     if(!a||!b) return;
     const p = document.createElementNS('http://www.w3.org/2000/svg','path');
-    p.setAttribute('d', mkRoundedPath(a.x, a.y, b.x, b.y));
+    p.setAttribute('d', mkRoundedPath(a.x, a.y, b.x, b.y, [a.id,b.id]));
     p.setAttribute('class','edge'); miniSvg.appendChild(p);
   });
   nodes.forEach(n=>{
@@ -257,6 +264,10 @@ function layoutRightHierarchical(graph, size, anchorId){
       yOf.set(n.id, y);
     }
   });
+  // 4-1) 메인 스파인 Y 고정: 시작 노드의 Y로 전부 스냅(브랜치 존재로 부모 평균이 내려가는 현상 방지)
+  const mainSet = new Set(main);
+  const baseMainY = (typeof yOf.get(start)==='number') ? yOf.get(start) : 160;
+  main.forEach(id=>{ yOf.set(id, baseMainY); });
   // 5) 결과
   return graph.nodes.map(n=>({ id:n.id, title:n.title, x:xOf.get(n.id), y:yOf.get(n.id) }));
 }

@@ -1,5 +1,5 @@
 export const UNITS = {
-  'C-001': { id:'C-001', name:'주인공', hp:35, hpMax:35, mp:10, spd:7, atk:18, def:4, shield:0, crit:0.185, dodge:0.05, block:0.165, position:1, skills:['SK-01','SK-31','SK-32','SK-MOVE-1','SK-11','SK-13'] },
+  'C-001': { id:'C-001', name:'주인공', hp:55, hpMax:55, mp:30, spd:7, atk:18, def:4, shield:0, crit:0.185, dodge:0.05, block:0.165, position:1, skills:['SK-01','SK-31','SK-32','SK-MOVE-1','SK-11','SK-13'] },
   'C-014': { id:'C-014', name:'궁수', hp:22, hpMax:22, mp:12, spd:6, atk:15, def:1, shield:0, crit:0.3, dodge:0.08, block:0.04, position:2, skills:['SK-02','SK-33','SK-12','SK-MOVE-1','SK-22'], deathLine:'크으... 여기까지인가.. 뒤는 부탁한다..', preferredRows:[3,2,1] },
   'E-101': { id:'E-101', name:'해골 병사', hp:18, hpMax:18, mp:0, spd:5, atk:5, def:1, shield:0, crit:0.05, dodge:0.02, block:0.02, position:1, skills:['SK-10'], passives:['PS-BONE'], deathLine:'키에에...' },
   'E-102': { id:'E-102', name:'해골 창병(중열)', hp:20, hpMax:20, mp:0, spd:5, atk:6, def:2, shield:0, crit:0.05, dodge:0.03, block:0.06, position:4, skills:['SK-10'], passives:['PS-BONE'], deathLine:'크어어..' },

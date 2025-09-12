@@ -1,11 +1,3 @@
----
-title: 전투 - 데이터와 수치
-category: 시스템
-parent: [[GDD/시스템/[SYS] 전투 - 개요]]
-related:
-  - [[GDD/데이터/[DATA] 데이터 모델 가이드]]
----
-
 ## 기초 수치
 - atk, hp/hpMax, mp/mpMax, def, spd, crit, dodge, block, shield
 

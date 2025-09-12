@@ -33,6 +33,14 @@ export function renderBattleView(root, state){
   const B = state.ui.battleState;
   console?.log?.('[battle] mount', { btid, allies: B.allyOrder, enemies: B.enemyOrder, queue: B.queue });
 
+  // 적이 이미 모두 사망(또는 없음) 상태라면 즉시 클리어 처리
+  try{
+    if(window.BATTLE.isBattleFinished(B)){
+      console.debug('[finish] auto at mount');
+      return showResult(B.winner==='ally');
+    }
+  }catch(e){ console.debug('[finish-check-error] at mount', e); }
+
   if(!B.queue || B.queue.length===0){
     const msg = document.createElement('div');
     msg.className='frame';
@@ -177,6 +185,37 @@ export function renderBattleView(root, state){
   let selectedTarget = B.target || null;
   // 이동 후보 오버레이 정리 함수 핸들
   let cleanupMoveOverlay = null;
+  // 스킬 레벨업 대기 제어
+  B.awaitingUpgrade = B.awaitingUpgrade || false;
+  B._awaitUpgradeResolve = B._awaitUpgradeResolve || null;
+
+  function debugFinish(tag){
+    try{
+      const eAlive = (B.enemyOrder||[]).filter(id=>id && (B.units[id]?.hp>0)).length;
+      const aAlive = (B.allyOrder||[]).filter(id=>id && (B.units[id]?.hp>0)).length;
+      console.debug('[battle-finish-check]', tag, { eAlive, aAlive, winner:B.winner, awaiting:B.awaitingUpgrade });
+    }catch(e){ console.debug('[battle-finish-check-error]', tag, e); }
+  }
+
+  function hasUpgrade(skillId, upId){
+    try{ const baseId=(B.turnUnit||'').split('@')[0]; return (state.skillProgress?.[baseId]?.[skillId]?.taken||[]).includes(upId); }catch{return false;}
+  }
+
+  function getSlotByIdOrBase(targetId){
+    // 우선 정확 ID 검색
+    let lane = B.enemyOrder.includes(targetId)? enemyLane : (B.allyOrder.includes(targetId)? allyLane : null);
+    let el = lane? lane.querySelector(`.unit-slot[data-unit-id="${targetId}"]`) : null;
+    if(el) return { lane, el };
+    // 베이스ID로 보정 검색
+    const base = (targetId||'').split('@')[0];
+    const all = Array.from(document.querySelectorAll('.unit-slot'));
+    const found = all.find(n => (n.dataset?.unitId||'').startsWith(base+'@'));
+    if(found){
+      const inEnemy = B.enemyOrder.includes(found.dataset.unitId);
+      return { lane: inEnemy? enemyLane : allyLane, el: found };
+    }
+    return { lane:null, el:null };
+  }
 
   function refreshCardStates(){
     const cards = cardsEl.querySelectorAll('.action-card');
@@ -257,15 +296,17 @@ export function renderBattleView(root, state){
     document.querySelectorAll('.unit-slot.is-aoe').forEach(el=>el.classList.remove('is-aoe'));
     if(!selectedSkill) return;
     if(selectedSkill.range==='ally') return; // no enemy AOE highlight for ally skills
-    if(selectedSkill.type==='row'){
+    if(selectedSkill.type==='row' || (selectedSkill.id==='SK-01' && hasUpgrade('SK-01','SK01_ROW'))){
       let targetRow = null;
-      if(Array.isArray(selectedSkill.to) && selectedSkill.to.length===1){ targetRow = selectedSkill.to[0]; }
+      if(selectedSkill.type==='row' && Array.isArray(selectedSkill.to) && selectedSkill.to.length===1){ targetRow = selectedSkill.to[0]; }
       else if(selectedTarget){ targetRow = B.units[selectedTarget]?.row || null; }
       if(!targetRow) return;
       B.enemyOrder.forEach(id=>{ if(!id) return; const u=B.units[id]; if(!u) return; if(u.row===targetRow){ const el = enemyLane.querySelector(`.unit-slot[data-unit-id="${id}"]`); if(el) el.classList.add('is-aoe'); } });
     } else if(selectedSkill.type==='line' && selectedTarget){
       const col = B.units[selectedTarget]?.col;
       B.enemyOrder.forEach(id=>{ if(!id) return; const u=B.units[id]; if(!u) return; if(u.col===col){ const el = enemyLane.querySelector(`.unit-slot[data-unit-id="${id}"]`); if(el) el.classList.add('is-aoe'); } });
+    } else if(selectedSkill.type==='strike' || selectedSkill.type==='multi' || selectedSkill.type==='poison'){
+      if(!selectedTarget) return; const el = enemyLane.querySelector(`.unit-slot[data-unit-id="${selectedTarget}"]`); if(el) el.classList.add('is-aoe');
     }
   }
 
@@ -392,9 +433,42 @@ export function renderBattleView(root, state){
       const targetText = sk.type==='row' ? (Array.isArray(sk.to)&&sk.to.length===1? `전열 전체` : `선택 라인 전체`) : (sk.range==='melee'? '근접: 가장 앞열만' : sk.range==='ranged'? '원거리: 전체 선택 가능' : (sk.to? (sk.to.includes(1)? '전열' : '후열') : '대상: 전/후열'));
       const attr = sk.damageType ? ` · 속성: ${sk.damageType==='slash'?'참격': sk.damageType==='pierce'?'관통': sk.damageType==='magic'?'마법':'타격'}` : '';
       const accDisp = Math.round((((sk.acc||1) + Math.max(0, sk.accAdd||0)) * 100));
-      const stats = (sk.type==='move')
-        ? `이동: 전방향 ${sk.move?.tiles||1}칸 · 전용`
-        : `명중: ${accDisp}% (+${Math.round((Math.max(0, sk.accAdd||0))*100)}%) · 대미지: ${Math.round((sk.coeff||1)*100)}% x ${sk.hits||1}${attr}`;
+      // 스킬 진행도: 유닛별 진행도에서 조회
+      const baseId = (B.turnUnit||'').split('@')[0];
+      const sp = (state.skillProgress?.[baseId]?.[sk.id]) || { level:1, xp:0, nextXp: (state.data.skills?.SKILL_CFG?.baseNext||20) };
+      // 선택된 강화 요약(스택 개수 포함)
+      const taken = (sp.taken||[]);
+      const upDefs = state.data.skills?.[sk.id]?.upgrades||[];
+      const countById = taken.reduce((m,id)=>{ m[id]=(m[id]||0)+1; return m; },{});
+      const takenNames = Object.keys(countById).map(id=>{
+        const def = upDefs.find(u=>u.id===id); const n = countById[id];
+        if(!def) return null; return `${def.name}${n>1?` x${n}`:''}`;
+      }).filter(Boolean);
+      const upLine = takenNames.length? `강화: ${takenNames.join(', ')}` : '';
+      // Max 판단: once 업그레이드 전부 획득했고 stack 업그레이드가 없으면 Max
+      const upAll = state.data.skills?.[sk.id]?.upgrades||[];
+      const hasStack = upAll.some(u=>u.type==='stack');
+      const allOnceIds = upAll.filter(u=>u.type==='once').map(u=>u.id);
+      const onceDone = allOnceIds.length>0 ? allOnceIds.every(id=> (sp.taken||[]).includes(id)) : false;
+      const isMax = (!hasStack) && (onceDone || upAll.length===0);
+      const lvLine = isMax ? `Lv.Max` : `Lv.${sp.level} (${sp.xp}/${sp.nextXp})`;
+      // 강화 적용된 설명 보정(간단 버전)
+      let info = '';
+      if(sk.type==='move'){
+        info = `이동: 전방향 ${sk.move?.tiles||1}칸 · 전용`;
+      } else {
+        // 대미지 보정(예: SK01_DMG30 스택)
+        let coeffEff = (sk.coeff||1);
+        const dmgStack = countById['SK01_DMG30']||0;
+        if(dmgStack>0){ coeffEff = Math.round((coeffEff * Math.pow(1.3, dmgStack))*100)/100; }
+        // 범위 보정(예: SK01_ROW)
+        const isRow = !!countById['SK01_ROW'] || sk.type==='row';
+        const dmgText = `${Math.round(coeffEff*100)}% x ${sk.hits||1}`;
+        const pre = `명중: ${accDisp}% (+${Math.round((Math.max(0, sk.accAdd||0))*100)}%) · 대미지: ${dmgText}${attr}`;
+        info = isRow ? `${pre} · 범위: 전열 전체` : pre;
+      }
+      const baseStats = info;
+      const stats = `${baseStats}<br>${lvLine}${upLine?`<br>${upLine}`:''}`;
       const debuffLine = (()=>{
         const parts = [];
         if(sk.bleed){ parts.push(`50% 확률로 ${sk.bleed.duration||3}턴간 출혈 상태`); }
@@ -456,7 +530,7 @@ export function renderBattleView(root, state){
     updateAOEHighlight();
   }
   if(B.allyOrder.includes(B.turnUnit)){
-    renderCards();
+  renderCards();
   } else {
     // 적 턴에는 카드 영역을 비운다
     cardsEl.innerHTML='';
@@ -585,6 +659,7 @@ export function renderBattleView(root, state){
     let lastWasHit = false;
     let maxEnd = 0; // 전체 스케줄 종료 시각(ms)
 
+    console.debug('[anim] queue', events.length, 'items');
     events.forEach((ev, idx)=>{
       // 시작 시각 계산
       let startAt = 0;
@@ -596,7 +671,7 @@ export function renderBattleView(root, state){
 
       // 각 이벤트의 표시/유지 시간(대략)
       let duration = 300; // 기본
-      if(ev.type==='hit' || ev.type==='miss') duration = 300; // 텍스트 유지 시간
+      if(ev.type==='hit' || ev.type==='miss' || ev.type==='skillLevelUp') duration = 300; // 텍스트 유지 시간
       if(ev.type==='shield') duration = 300;
       if(ev.type==='dead') duration = 800; // CSS fade-out 800ms와 일치
 
@@ -620,11 +695,56 @@ export function renderBattleView(root, state){
               setTurnHighlight();
             }, 240);
           }
+        } else if(ev.type==='skillLevelUp'){
+          // 전투 중 즉시 레벨업: 선택 모달 표시(간단 UI)
+          const uId = ev.unit; const sId = ev.skillId; const u = B.units[uId];
+          B.awaitingUpgrade = true;
+          const modal = document.createElement('div'); modal.className='modal-backdrop';
+          const box = document.createElement('div'); box.className='modal';
+          box.innerHTML = `<h3>스킬 레벨업</h3><p>${u?.name||uId}의 ${state.data.skills[sId]?.name||sId} Lv.${(state.skillProgress?.[uId.split('@')[0]]?.[sId]?.level)||''}</p><div class="actions" id="upList"></div>`;
+          modal.appendChild(box); frame.appendChild(modal);
+          const list = box.querySelector('#upList');
+          // 실제 업그레이드 풀에서 3개 랜덤 추출
+          const baseId = uId.split('@')[0];
+          state.skillProgress = state.skillProgress || {}; state.skillProgress[baseId] = state.skillProgress[baseId] || {}; state.skillProgress[baseId][sId] = state.skillProgress[baseId][sId] || { level:1, xp:0, nextXp: (state.data.skills?.SKILL_CFG?.baseNext||20), taken:[] };
+          const progress = state.skillProgress[baseId][sId];
+          const pool = (state.data.skills?.[sId]?.upgrades||[]).filter(up=> up && (up.type!=='once' || !(progress.taken||[]).includes(up.id)));
+          const rng = state.rng || { int:(n)=> Math.floor(Math.random()*n) };
+          const picks = [];
+          for(let i=0;i<Math.min(3, pool.length);i++){ const idx = rng.int(pool.length); picks.push(pool.splice(idx,1)[0]); }
+          if(!picks.length){
+            // 더 이상 선택 불가 → 모달 표시 없이 즉시 계속 진행
+            try{ modal.remove(); }catch{}
+            B.awaitingUpgrade=false; if(typeof B._awaitUpgradeResolve==='function'){ const fn=B._awaitUpgradeResolve; B._awaitUpgradeResolve=null; fn(); }
+            // 카드 갱신(Lv.Max 표기 반영)
+            renderBattleView(root, state);
+            // 전멸 상태면 즉시 종료
+            if(window.BATTLE.isBattleFinished(B)){ showResult(B.winner==='ally'); }
+            return;
+          }
+          picks.forEach(up=>{
+            const b=document.createElement('button'); b.className='btn'; b.innerHTML = `<strong>${up.name}</strong><br><span style="font-size:12px; color:#9aa0a6;">${up.desc||''}</span>`;
+            b.onclick=()=>{
+              // 진행도에 반영
+              state.skillProgress = state.skillProgress || {}; state.skillProgress[baseId] = state.skillProgress[baseId] || {}; state.skillProgress[baseId][sId] = state.skillProgress[baseId][sId] || { level:1, xp:0, nextXp: (state.data.skills?.SKILL_CFG?.baseNext||20), taken:[] };
+              const sp = state.skillProgress[baseId][sId];
+              sp.taken = sp.taken || [];
+              sp.taken.push(up.id);
+              modal.remove();
+              B.awaitingUpgrade=false; if(typeof B._awaitUpgradeResolve==='function'){ const fn=B._awaitUpgradeResolve; B._awaitUpgradeResolve=null; fn(); }
+              // 카드 즉시 갱신을 위해 재렌더
+              renderBattleView(root, state);
+              // 업그레이드 선택 직후, 적 전멸이면 즉시 종료
+              if(window.BATTLE.isBattleFinished(B)){ showResult(B.winner==='ally'); }
+            };
+            list.appendChild(b);
+          });
         } else if(ev.type==='hit'){
           const toId = ev.to; const fromId = ev.from;
-          const targetLane = (toId && toId.includes('@E')) ? enemyLane : allyLane;
-          const slotEl = targetLane.querySelector(`.unit-slot[data-unit-id="${toId}"]`);
+          const { lane:targetLane, el:slotEl } = getSlotByIdOrBase(toId);
           if(slotEl){
+            // 비네팅(타격 대상 강조)
+            slotEl.classList.add('is-aoe'); setTimeout(()=>slotEl.classList.remove('is-aoe'), 260);
             slotEl.classList.add('impact'); setTimeout(()=>slotEl.classList.remove('impact'), 200);
             const bar = slotEl.querySelector('.hpbar > span'); if(bar && typeof ev.hp==='number'){ bar.style.width = `${Math.max(0,(ev.hp/(B.units[toId].hpMax||1))*100)}%`; } else { const u=B.units[toId]; if(bar){ bar.style.width = `${Math.max(0,(u.hp/u.hpMax)*100)}%`; } }
             const sbar = slotEl.querySelector('.shieldbar > span'); if(sbar){ const sv = (typeof ev.shield==='number')? ev.shield : (B.units[toId].shield||0); sbar.style.width = `${Math.max(0, Math.min(100, (sv/(B.units[toId].hpMax||1))*100))}%`; const barWrap = sbar.parentElement; if(barWrap){ barWrap.style.display = (sv>0)? 'block' : 'none'; } }
@@ -639,7 +759,7 @@ export function renderBattleView(root, state){
               const line = base.deathLine;
               if(line){ const sp=document.createElement('div'); sp.className='speech'; sp.textContent=line; slotEl.appendChild(sp); setTimeout(()=>{ if(sp.parentElement) sp.remove(); }, 1600); }
             }
-          }
+          } else { console.warn('[anim-hit] slot not found', { toId, lane: B.enemyOrder.includes(toId)? 'enemy':'ally' }); }
           const fromLane = (fromId && fromId.includes('@E')) ? enemyLane : allyLane;
           fromLane.classList.add('hit-swing'); setTimeout(()=>fromLane.classList.remove('hit-swing'), 260);
           const fromEl = fromLane.querySelector(`.unit-slot[data-unit-id="${fromId}"]`);
@@ -664,22 +784,22 @@ export function renderBattleView(root, state){
             console.warn?.('[death-fail]', toId, 'slot not found in', lane?.className, 'wasEnemy:', wasEnemy);
           }
         } else if(ev.type==='miss'){
-          const toId = ev.to; const targetLane = (toId && toId.includes('@E')) ? enemyLane : allyLane; const slotEl = targetLane.querySelector(`.unit-slot[data-unit-id="${toId}"]`);
+          const toId = ev.to; const targetLane = B.enemyOrder.includes(toId) ? enemyLane : allyLane; const slotEl = targetLane.querySelector(`.unit-slot[data-unit-id="${toId}"]`);
           if(slotEl){ const miss = document.createElement('div'); miss.className='miss-float'; miss.textContent='MISS'; miss.style.left='50%'; miss.style.top='0'; slotEl.appendChild(miss); setTimeout(()=>miss.remove(), 800); }
-          const fromId = ev.from; const fromLane = (fromId && fromId.includes('@E')) ? enemyLane : allyLane; const fromEl = fromLane.querySelector(`.unit-slot[data-unit-id="${fromId}"]`);
+          const fromId = ev.from; const fromLane = B.enemyOrder.includes(fromId) ? enemyLane : allyLane; const fromEl = fromLane.querySelector(`.unit-slot[data-unit-id="${fromId}"]`);
           if(fromEl){ const cls = B.enemyOrder.includes(fromId)? 'lunge-enemy' : 'lunge-ally'; fromEl.classList.add(cls); setTimeout(()=>fromEl.classList.remove(cls), 220); }
         } else if(ev.type==='shield'){
-          const toId = ev.to; const lane = (toId && toId.includes('@E')) ? enemyLane : allyLane; const slotEl = lane.querySelector(`.unit-slot[data-unit-id="${toId}"]`);
+          const toId = ev.to; const lane = B.enemyOrder.includes(toId) ? enemyLane : allyLane; const slotEl = lane.querySelector(`.unit-slot[data-unit-id="${toId}"]`);
           if(slotEl){ const sv = (typeof ev.shield==='number')? ev.shield : (B.units[toId].shield||0); const sbar = slotEl.querySelector('.shieldbar > span'); if(sbar){ sbar.style.width = `${Math.max(0, Math.min(100, (sv/(B.units[toId].hpMax||1))*100))}%`; const barWrap = sbar.parentElement; if(barWrap){ barWrap.style.display = (sv>0)? 'block' : 'none'; } } const fx = document.createElement('div'); fx.className='miss-float'; fx.textContent = `+SHIELD ${ev.amount||0}`; fx.style.left='50%'; fx.style.top='0'; slotEl.appendChild(fx); setTimeout(()=>fx.remove(), 900); }
         } else if(ev.type==='heal'){
-          const toId = ev.to; const lane = (B.allyOrder.includes(toId)) ? allyLane : enemyLane; const slotEl = lane.querySelector(`.unit-slot[data-unit-id="${toId}"]`);
+          const toId = ev.to; const lane = B.enemyOrder.includes(toId) ? enemyLane : allyLane; const slotEl = lane.querySelector(`.unit-slot[data-unit-id="${toId}"]`);
           if(slotEl){
             const bar = slotEl.querySelector('.hpbar > span'); if(bar && typeof ev.hp==='number'){ bar.style.width = `${Math.max(0,(ev.hp/(B.units[toId].hpMax||1))*100)}%`; }
             const fx = document.createElement('div'); fx.className='heal-float'; fx.textContent = `+${ev.amount||0}`; fx.style.left='50%'; fx.style.top='0'; slotEl.appendChild(fx); setTimeout(()=>fx.remove(), 900);
           }
         } else if(ev.type==='poison'){
           // 적용 시점: 디버프 부여 알림 + 즉시 아이콘/남은 턴 갱신
-          const toId = ev.to; const lane = (B.allyOrder.includes(toId)) ? allyLane : enemyLane; const slotEl = lane.querySelector(`.unit-slot[data-unit-id="${toId}"]`);
+          const toId = ev.to; const lane = B.enemyOrder.includes(toId) ? enemyLane : allyLane; const slotEl = lane.querySelector(`.unit-slot[data-unit-id="${toId}"]`);
           if(slotEl){
             const fx = document.createElement('div'); fx.className='miss-float'; fx.textContent = `POISON`; fx.style.left='50%'; fx.style.top='0'; slotEl.appendChild(fx); setTimeout(()=>fx.remove(), 800);
             // 아이콘이 없다면 추가, 있다면 남은 턴 갱신
@@ -692,7 +812,7 @@ export function renderBattleView(root, state){
             }
           }
         } else if(ev.type==='poisonTick'){
-          const toId = ev.to; const lane = (B.allyOrder.includes(toId)) ? allyLane : enemyLane; const slotEl = lane.querySelector(`.unit-slot[data-unit-id="${toId}"]`);
+          const toId = ev.to; const lane = B.enemyOrder.includes(toId) ? enemyLane : allyLane; const slotEl = lane.querySelector(`.unit-slot[data-unit-id="${toId}"]`);
           if(slotEl){
             const bar = slotEl.querySelector('.hpbar > span'); if(bar && typeof ev.hp==='number'){ bar.style.width = `${Math.max(0,(ev.hp/(B.units[toId].hpMax||1))*100)}%`; }
             const fx = document.createElement('div'); fx.className='poison-float'; fx.textContent = `-${ev.amount||0}`; fx.style.left='50%'; fx.style.top='0'; slotEl.appendChild(fx); setTimeout(()=>fx.remove(), 900);
@@ -702,7 +822,7 @@ export function renderBattleView(root, state){
           }
         } else if(ev.type==='bleed'){
           // 출혈 부여 알림 + 아이콘 추가/갱신
-          const toId = ev.to; const lane = (B.allyOrder.includes(toId)) ? allyLane : enemyLane; const slotEl = lane.querySelector(`.unit-slot[data-unit-id="${toId}"]`);
+          const toId = ev.to; const lane = B.enemyOrder.includes(toId) ? enemyLane : allyLane; const slotEl = lane.querySelector(`.unit-slot[data-unit-id="${toId}"]`);
           if(slotEl){
             const fx = document.createElement('div'); fx.className='miss-float'; fx.textContent = `BLEED`; fx.style.left='50%'; fx.style.top='0'; slotEl.appendChild(fx); setTimeout(()=>fx.remove(), 800);
             let icon = slotEl.querySelector('.slot-buffs .bleed');
@@ -712,7 +832,7 @@ export function renderBattleView(root, state){
             } else { const t = icon.querySelector('.turns'); if(t){ t.textContent = `${ev.duration||3}`; } }
           }
         } else if(ev.type==='bleedTick'){
-          const toId = ev.to; const lane = (B.allyOrder.includes(toId)) ? allyLane : enemyLane; const slotEl = lane.querySelector(`.unit-slot[data-unit-id="${toId}"]`);
+          const toId = ev.to; const lane = B.enemyOrder.includes(toId) ? enemyLane : allyLane; const slotEl = lane.querySelector(`.unit-slot[data-unit-id="${toId}"]`);
           if(slotEl){
             const bar = slotEl.querySelector('.hpbar > span'); if(bar && typeof ev.hp==='number'){ bar.style.width = `${Math.max(0,(ev.hp/(B.units[toId].hpMax||1))*100)}%`; }
             const fx = document.createElement('div'); fx.className='bleed-float'; fx.textContent = `-${ev.amount||0}`; fx.style.left='50%'; fx.style.top='0'; slotEl.appendChild(fx); setTimeout(()=>fx.remove(), 900);
@@ -771,6 +891,8 @@ export function renderBattleView(root, state){
     document.querySelectorAll('.unit-slot .hit-badge').forEach(n=>n.remove());
     document.querySelectorAll('.unit-slot .hpbar .pred').forEach(p=>{ p.style.width='0%'; p.style.left='0%'; });
     B.animating = false;
+    // 업그레이드 대기 시, 사용자가 선택할 때까지 멈춤
+    if(B.awaitingUpgrade){ console.debug('[upgrade-wait] start after player turn'); await new Promise(r=>{ B._awaitUpgradeResolve = r; }); console.debug('[upgrade-wait] done after player turn'); }
     // 다음 턴 시작 효과(중독/재생 등) 즉시 적용 및 연출
     if(B.turnUnit && B.turnStartProcessedFor !== B.turnUnit){
       window.BATTLE.applyTurnStartEffects(B);
@@ -780,7 +902,9 @@ export function renderBattleView(root, state){
     }
     // 턴이 넘어간 후 하이라이트를 갱신
     setTurnHighlight();
-    if(window.BATTLE.isBattleFinished(B)){ return showResult(B.winner==='ally'); }
+    debugFinish('after-player-turn');
+    if(!B.awaitingUpgrade && window.BATTLE.isBattleFinished(B)){ console.debug('[finish] end after player turn'); return showResult(B.winner==='ally'); }
+    if(B.awaitingUpgrade){ console.debug('[upgrade-wait] start before enemy phase'); await new Promise(r=>{ B._awaitUpgradeResolve = r; }); debugFinish('after-upgrade-before-enemy'); if(window.BATTLE.isBattleFinished(B)){ console.debug('[finish] end after upgrade before enemy'); return showResult(B.winner==='ally'); } }
     await runEnemyPhase();
   }
 
@@ -818,12 +942,24 @@ export function renderBattleView(root, state){
       if(foeEl){ foeEl.classList.remove('attacking'); }
       await new Promise(r=>setTimeout(r, 500));
       B.animating = false;
+      // 적 턴에도 업그레이드가 발생하면 대기
+      if(B.awaitingUpgrade){ console.debug('[upgrade-wait] start during enemy phase'); await new Promise(r=>{ B._awaitUpgradeResolve = r; }); console.debug('[upgrade-wait] done during enemy phase'); }
       // 스킬 처리로 다음 턴 유닛으로 넘어갔으므로 하이라이트 갱신
       setTurnHighlight();
-      if(window.BATTLE.isBattleFinished(B)){ showResult(B.winner==='ally'); return; }
+      debugFinish('after-enemy-turn-iteration');
+      if(window.BATTLE.isBattleFinished(B)){ console.debug('[finish] end after enemy iteration'); showResult(B.winner==='ally'); return; }
     }
     // 애니메이션이 모두 끝난 후에만 리렌더(연출 보존)
-    setTimeout(()=>{ if(!window.BATTLE.isBattleFinished(B) && !B.animating) renderBattleView(root, state); }, 60);
+    if(!B.refreshScheduled){
+      B.refreshScheduled = true;
+      setTimeout(()=>{
+        B.refreshScheduled = false;
+        debugFinish('enemy-phase-tail');
+        if(!window.BATTLE.isBattleFinished(B) && !B.animating){
+          renderBattleView(root, state);
+        }
+      }, 120);
+    }
   }
 
   function showResult(isWin){

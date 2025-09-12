@@ -1,10 +1,3 @@
----
-title: 전투 - 공격 속성과 패시브
-category: 시스템
-parent: [[GDD/시스템/[SYS] 전투 - 개요]]
-related:
-  - [[GDD/시스템/[SYS] 전투 - 타겟팅과 범위]]
----
 
 ## 공격 속성
 - 참격(slash), 관통(pierce), 타격(blunt), 마법(magic)

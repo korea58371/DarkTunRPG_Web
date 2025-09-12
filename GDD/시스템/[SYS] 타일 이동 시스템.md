@@ -28,15 +28,13 @@ flowchart TD
   IsMove -- 예 --> Active[목적지 후보 표시]
   Active --> Click[클릭으로 위치 확정]
   Click --> DoMoveActor[perform · doMove]
-  DoMoveActor --> Log1[[log move]]
-  Log1 --> Anim1[애니메이션/리렌더]
+  DoMoveActor --> Anim1[애니메이션/리렌더]
   Anim1 --> End1([턴 소모, 피해 없음])
 
   IsMove -- 아니오 --> HitLoop[히트 루프]
   HitLoop -->|MISS| NoMove[이동 없음]
   HitLoop -->|HIT| DoMoveTarget[doMove 대상]
-  DoMoveTarget --> Log2[[log move]]
-  Log2 --> Anim2[애니메이션/리렌더]
+  DoMoveTarget --> Anim2[애니메이션/리렌더]
   Anim2 --> Next([후속 처리/종료 체크])
 ```
 

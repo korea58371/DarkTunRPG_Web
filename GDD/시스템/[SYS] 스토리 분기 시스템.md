@@ -1,16 +1,3 @@
----
-title: 스토리 분기 시스템
-category: 시스템
-parent: [[GDD/[IDX] 인덱스]]
-children:
-  - [[GDD/UX/[UX] 루트 선택 UI]]
-  - [[GDD/콘텐츠/[CNT] 에피소드 타일]]
-  - [[GDD/시스템/[SYS] 턴제 전투 시스템]]
-  - [[GDD/시스템/[SYS] 부대 정비]]
-  - [[GDD/시스템/[SYS] 상태 지속]]
-data:
-  schema: [[GDD/데이터/[DATA] 데이터 모델 가이드]]
----
 
 ## 상위/연관
 - 상위: [[GDD/[IDX] 인덱스]]  

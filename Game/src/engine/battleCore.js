@@ -193,10 +193,35 @@ export function pickTarget(state, battleState, isAlly, sk){
 }
 
 export function performSkill(state, battleState, actor, sk){
+  // 유닛 개인 강화 적용으로 스킬을 일시 복사해 가공
+  function applySkillUpgrades(baseSkill){
+    try{
+      const actorIdLocal = typeof actor === 'string' ? actor : actor.id;
+      const baseId = (actorIdLocal||'').split('@')[0];
+      const sp = state.skillProgress?.[baseId]?.[baseSkill.id];
+      if(!sp || !sp.taken || !sp.taken.length) return baseSkill;
+      const taken = sp.taken;
+      const count = (id)=> taken.filter(x=>x===id).length;
+      const copy = { ...baseSkill };
+      // 베기: 대미지 +30% 스택
+      if(baseSkill.id==='SK-01'){
+        const dmgStacks = count('SK01_DMG30'); if(dmgStacks>0){ copy.coeff = (copy.coeff||1) * Math.pow(1.3, dmgStacks); }
+        if(taken.includes('SK01_ROW')){ copy.type = 'row'; copy.to = [1]; }
+        if(taken.includes('SK01_BLEED')){ copy.bleed = { chance:1, duration:3, coeff:0.3 }; }
+      }
+      // 검막: 실드 +5 스택, 블록 +50%p 스택, 반격(가드 성공 시 1회 타격) once
+      if(baseSkill.id==='SK-13'){
+        const shieldStacks = count('SK13_SHIELD5'); if(shieldStacks>0){ copy.amount = (copy.amount||0) + (5*shieldStacks); }
+        const blockStacks = count('SK13_BLOCK50'); if(blockStacks>0){ copy._blockBonus = 0.5*blockStacks; }
+        if(taken.includes('SK13_COUNTER')){ copy._counterOnBlock = true; }
+      }
+      return copy;
+    }catch(e){ return baseSkill; }
+  }
   // helpers
   const clamp01 = (v)=> Math.max(0, Math.min(1, Number.isFinite(v)? v : 0));
   const calcBaseDamage = (attacker, target, skill)=>{
-    const coeff = Math.max(0, skill.coeff||0);
+    let coeff = Math.max(0, skill.coeff||0);
     const atk = attacker.atk||1; const def = target.def||0;
     return Math.max(1, Math.round((atk * coeff) - def));
   };
@@ -283,7 +308,17 @@ export function performSkill(state, battleState, actor, sk){
       }
     }
     // block / crit
-    const blocked = battleState.rng.next() < block;
+    // 강화에 의한 블록 보너스(수비측에게 적용)
+    let blockBonus = 0;
+    try{
+      const baseIdDef = (target.id||'').split('@')[0];
+      const spDef = state.skillProgress?.[baseIdDef]?.['SK-13'];
+      if(spDef && Array.isArray(spDef.taken)){
+        const stacks = spDef.taken.filter(x=>x==='SK13_BLOCK50').length;
+        if(stacks>0){ blockBonus += 0.5*stacks; }
+      }
+    }catch{}
+    const blocked = battleState.rng.next() < clamp01(block + blockBonus);
     const isCrit = battleState.rng.next() < crit;
     let dmg = calcBaseDamage(attacker, target, skill);
     // Passive damage multiplier
@@ -301,12 +336,15 @@ export function performSkill(state, battleState, actor, sk){
   };
   const actorId = typeof actor === 'string' ? actor : actor.id;
   const actorUnit = typeof actor === 'string' ? battleState.units[actor] : actor;
+  // 스킬 사본에 강화 적용
+  sk = applySkillUpgrades(sk);
   const isAlly = battleState.allyOrder.includes(actorId);
   const pool = isAlly ? battleState.enemyOrder : battleState.allyOrder;
   // MP cost
   const mpCost = sk.cost?.mp || 0;
   if(mpCost>0){ actorUnit.mp = Math.max(0, (actorUnit.mp||0) - mpCost); }
   let targetId = pickTarget(state, battleState, isAlly, sk);
+  const __logBefore = (battleState.log||[]).length;
   if(!targetId && sk.type!=='shield' && sk.type!=='heal') return;
   // Movement executor: 적중 후 이동(또는 순수 이동 스킬)
   const doMove=(moverId, moveSpec)=>{
@@ -341,9 +379,10 @@ export function performSkill(state, battleState, actor, sk){
   };
 
   // Row-wide skill handling
-  if(sk.type==='row'){
+  if(sk.type==='row' || (sk.id==='SK-01' && (()=>{ // 베기 강화: 일열 전체로 변경
+    try{ const baseId=(actorId||'').split('@')[0]; const t=state.skillProgress?.[baseId]?.['SK-01']?.taken||[]; return t.includes('SK01_ROW'); }catch{return false;} })() ) ){
     maybeMoveActorBefore();
-    const targetRow = (Array.isArray(sk.to) && sk.to.length===1) ? sk.to[0] : (battleState.units[targetId]?.row || 1);
+    const targetRow = (sk.type==='row' && Array.isArray(sk.to) && sk.to.length===1) ? sk.to[0] : (battleState.units[targetId]?.row || 1);
     const targets = pool.filter(id=>id && (battleState.units[id]?.row===targetRow) && (battleState.units[id]?.hp>0));
     targets.forEach(tid=>{
       const tUnit = battleState.units[tid];
@@ -488,6 +527,41 @@ export function performSkill(state, battleState, actor, sk){
     battleState.lastTarget = battleState.lastTarget || {};
     battleState.lastTarget[actorId] = targetId;
   }
+  const __logAfter = (battleState.log||[]).length;
+  console.debug?.('[skill-queue]', sk.id, 'events+', (__logAfter-__logBefore), { total: __logAfter, targetId });
+
+  // === 스킬 경험치/레벨업 처리(아군만) ===
+  try{
+    if(!isAlly) return; // 적은 강화/경험치 없음
+    // baseId 추출(C-001@A0 → C-001)
+    const baseId = (actorId||'').split('@')[0];
+    const progRoot = state.skillProgress = state.skillProgress || {};
+    const unitProg = progRoot[baseId] = progRoot[baseId] || {};
+    const cfg = (state.data?.skills && state.data.skills.SKILL_CFG) || { baseGain: 10, missMul: 0.5, baseNext: 20, curveMul: 1.35, curveAdd: 5 };
+    const sp = unitProg[sk.id] = unitProg[sk.id] || { level:1, xp:0, nextXp: cfg.baseNext||20, taken:[] };
+    // 획득량: 힐/버프류는 100%, 그 외 miss 비율 적용
+    let gain = cfg.baseGain||10; // 기본 경험치/사용
+    const isSupport = (sk.type==='heal' || sk.type==='regen' || sk.type==='shield');
+    if(!isSupport){
+      // 최근 로그에 miss가 하나도 없으면 적중으로 간주
+      const hadHit = (battleState.log||[]).some(ev=> ev.type==='hit' && ev.from===actorId);
+      const hadMiss = (battleState.log||[]).some(ev=> ev.type==='miss' && ev.from===actorId);
+      if(hadMiss && !hadHit){ gain = Math.round(gain * (cfg.missMul??0.5)); }
+    }
+    sp.xp += gain;
+    // 레벨업: 커브는 점증(next = ceil(next*1.35) + 5*level)
+    const leveled = [];
+    while(sp.xp >= sp.nextXp){
+      sp.xp -= sp.nextXp;
+      sp.level += 1;
+      sp.nextXp = Math.ceil(sp.nextXp * (cfg.curveMul||1.35) + (cfg.curveAdd||5) * sp.level);
+      leveled.push(sp.level);
+    }
+    if(leveled.length){
+      // 즉시 선택을 위한 이벤트를 로그에 남겨 뷰가 모달을 띄울 수 있게 함
+      battleState.log.push({ type:'skillLevelUp', unit: actorId, skillId: sk.id, levels: leveled.length, level: sp.level });
+    }
+  }catch(e){ /* fail-soft */ }
 }
 
 // Apply start-of-turn effects (e.g., regen) when UI highlights the new turn unit

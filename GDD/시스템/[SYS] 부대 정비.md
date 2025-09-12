@@ -1,11 +1,4 @@
----
-title: 부대 정비
-category: 시스템
-parent: [[GDD/시스템/[SYS] 턴제 전투 시스템]]
-related:
-  - [[GDD/UX/[UX] 루트 선택 UI]]
-  - [[GDD/데이터/[DATA] 데이터 모델 가이드]]
----
+
 
 ## 상위/연관
 - 상위: [[GDD/시스템/[SYS] 턴제 전투 시스템]]  

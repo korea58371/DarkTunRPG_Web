@@ -12,6 +12,8 @@ export function initState(){
     // ownedUnits: 보유(획득)한 동료 목록. 초기에는 주인공만 보유
     ownedUnits: { 'C-001': true },
     persist: { hp: {}, mp: {}, stress: {} },
+    // 스킬 진행도(회차 유지): per unit(baseId) per skillId
+    skillProgress: {},
     data: DATA,
     ui: { currentRoute: null, currentEpisode: null, battle: null },
   };

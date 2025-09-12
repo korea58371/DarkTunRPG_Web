@@ -12,6 +12,7 @@ const seedSpan = document.getElementById('seed');
 const state = initState();
 // 전역 바인딩: 뷰에서 엔진 함수 접근
 window.BATTLE = BATTLE;
+window.appState = state;
 if (seedSpan) seedSpan.textContent = state.rng.seed;
 
 function render(view){

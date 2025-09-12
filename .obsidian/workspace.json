@@ -6,7 +6,7 @@
       {
         "id": "958974b133e9e04c",
         "type": "tabs",
-        "dimension": 54.46750902527076,
+        "dimension": 80.14440433212997,
         "children": [
           {
             "id": "6c4d9e47f26fc414",
@@ -42,12 +42,12 @@
             "state": {
               "type": "markdown",
               "state": {
-                "file": "GDD/시스템/[SYS] 상태 지속.md",
+                "file": "GDD/시스템/[SYS] 스토리 분기 시스템.md",
                 "mode": "source",
                 "source": false
               },
               "icon": "lucide-file",
-              "title": "[SYS] 상태 지속"
+              "title": "[SYS] 스토리 분기 시스템"
             }
           },
           {
@@ -112,16 +112,20 @@
       {
         "id": "fcfcb317a89657b4",
         "type": "tabs",
-        "dimension": 45.53249097472924,
+        "dimension": 19.855595667870034,
         "children": [
           {
             "id": "af0add75797b7e5b",
             "type": "leaf",
             "state": {
-              "type": "graph",
-              "state": {},
-              "icon": "lucide-git-fork",
-              "title": "그래프 뷰"
+              "type": "markdown",
+              "state": {
+                "file": "GDD/시스템/[SYS] 부대 정비.md",
+                "mode": "source",
+                "source": false
+              },
+              "icon": "lucide-file",
+              "title": "[SYS] 부대 정비"
             }
           }
         ]
@@ -274,22 +278,24 @@
   },
   "active": "5dc42f359032ee67",
   "lastOpenFiles": [
-    "GDD/시스템/[SYS] 부대 정비.md",
-    "GDD/시스템/[SYS] 전투 - UI.md",
-    "GDD/시스템/[SYS] 타일 이동 시스템.md",
-    "GDD/시스템/[SYS] 턴제 전투 시스템.md",
-    "레벨.md",
-    "GDD/시스템/[SYS] 전투 - 턴과 행동.md",
-    "GDD/시스템/[SYS] 전투 - 연출 시스템.md",
-    "GDD/시스템/[SYS] 전투 - 타겟팅과 범위.md",
-    "GDD/데이터/[DATA] 데이터 모델 가이드.md",
-    "GDD/시스템/[SYS] 상태 지속.md",
-    "GDD/시스템/[SYS] 스킬 강화 시스템.md",
-    "GDD/시스템/[SYS] 스토리 분기 시스템.md",
-    "GDD/시스템/[SYS] 전투 - 개요.md",
-    "GDD/시스템/[SYS] 전투 - 공격 속성과 패시브.md",
-    "GDD/시스템/[SYS] 전투 - 데이터와 수치.md",
+    "GDD/[IDX] 인덱스.md",
+    "GDD/UX/[UX] 루트 선택 UI.md",
     "GDD/콘텐츠/[CNT] 에피소드 타일.md",
+    "GDD/시스템/[SYS] 턴제 전투 시스템.md",
+    "GDD/시스템/[SYS] 타일 이동 시스템.md",
+    "GDD/시스템/[SYS] 전투 - UI.md",
+    "GDD/시스템/[SYS] 전투 - 턴과 행동.md",
+    "GDD/시스템/[SYS] 전투 - 타겟팅과 범위.md",
+    "GDD/시스템/[SYS] 전투 - 연출 시스템.md",
+    "GDD/시스템/[SYS] 전투 - 데이터와 수치.md",
+    "GDD/시스템/[SYS] 전투 - 공격 속성과 패시브.md",
+    "GDD/시스템/[SYS] 전투 - 개요.md",
+    "GDD/시스템/[SYS] 스토리 분기 시스템.md",
+    "GDD/시스템/[SYS] 스킬 강화 시스템.md",
+    "GDD/시스템/[SYS] 상태 지속.md",
+    "GDD/시스템/[SYS] 부대 정비.md",
+    "GDD/데이터/[DATA] 데이터 모델 가이드.md",
+    "레벨.md",
     "등급.md",
     "다회차 플레이.md",
     "아이디어.md",
@@ -301,8 +307,6 @@
     "Game/src/data/passives.js",
     "상태이상.md",
     "종족 종류.md",
-    "위험색.md",
-    "작업 폴더/환영합니다!.md",
     "작업 폴더",
     "Game/src/data/battles.js",
     "Game/src/data/skills.js",

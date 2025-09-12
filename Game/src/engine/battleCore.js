@@ -415,6 +415,11 @@ export function performSkill(state, battleState, actor, sk){
         const qi = battleState.queue.indexOf(tid); if(qi>-1) battleState.queue.splice(qi,1);
         battleState.log.push({ type:'dead', to: tid });
         if(battleState.allyOrder.includes(tid)) battleState.deadAllies.push(tid.split('@')[0]);
+        try{
+          const eAlive = battleState.enemyOrder.filter(id=>id && (battleState.units[id]?.hp>0)).length;
+          const aAlive = battleState.allyOrder.filter(id=>id && (battleState.units[id]?.hp>0)).length;
+          console.debug?.('[core-death-row]', { battleId: battleState.id, to: tid, eAlive, aAlive });
+        }catch{}
       }
     });
   } else if(sk.type==='line'){
@@ -438,6 +443,11 @@ export function performSkill(state, battleState, actor, sk){
         const qi = battleState.queue.indexOf(tid); if(qi>-1) battleState.queue.splice(qi,1);
         battleState.log.push({ type:'dead', to: tid });
         if(battleState.allyOrder.includes(tid)) battleState.deadAllies.push(tid.split('@')[0]);
+        try{
+          const eAlive = battleState.enemyOrder.filter(id=>id && (battleState.units[id]?.hp>0)).length;
+          const aAlive = battleState.allyOrder.filter(id=>id && (battleState.units[id]?.hp>0)).length;
+          console.debug?.('[core-death-line]', { battleId: battleState.id, to: tid, eAlive, aAlive });
+        }catch{}
       }
     });
   } else if(sk.type==='shield'){
@@ -525,6 +535,11 @@ export function performSkill(state, battleState, actor, sk){
       const qi = battleState.queue.indexOf(targetId); if(qi>-1) battleState.queue.splice(qi,1);
       battleState.log.push({ type:'dead', to: targetId });
       if(battleState.allyOrder.includes(targetId)) battleState.deadAllies.push(targetId.split('@')[0]);
+      try{
+        const eAlive = battleState.enemyOrder.filter(id=>id && (battleState.units[id]?.hp>0)).length;
+        const aAlive = battleState.allyOrder.filter(id=>id && (battleState.units[id]?.hp>0)).length;
+        console.debug?.('[core-death-single]', { battleId: battleState.id, to: targetId, eAlive, aAlive });
+      }catch{}
     }
     // 루프 내에서 이동 처리했으므로 추가 이동 없음
     // 출혈 부여(스킬 메타에 존재할 경우): "적중 시" 확률로 적용
@@ -616,6 +631,11 @@ export function applyTurnStartEffects(battleState){
       if(battleState.allyOrder.includes(u.id)) battleState.deadAllies.push(u.id.split('@')[0]);
       // 다음 턴 유닛 갱신
       battleState.turnUnit = battleState.queue[0] || null;
+      try{
+        const eAlive = battleState.enemyOrder.filter(id=>id && (battleState.units[id]?.hp>0)).length;
+        const aAlive = battleState.allyOrder.filter(id=>id && (battleState.units[id]?.hp>0)).length;
+        console.debug?.('[core-death-dot-poison]', { battleId: battleState.id, to: u.id, eAlive, aAlive });
+      }catch{}
       return; // regen 등 이후 효과는 적용하지 않음
     }
   }
@@ -637,6 +657,11 @@ export function applyTurnStartEffects(battleState){
       battleState.log.push({ type:'dead', to: u.id });
       if(battleState.allyOrder.includes(u.id)) battleState.deadAllies.push(u.id.split('@')[0]);
       battleState.turnUnit = battleState.queue[0] || null;
+      try{
+        const eAlive = battleState.enemyOrder.filter(id=>id && (battleState.units[id]?.hp>0)).length;
+        const aAlive = battleState.allyOrder.filter(id=>id && (battleState.units[id]?.hp>0)).length;
+        console.debug?.('[core-death-dot-bleed]', { battleId: battleState.id, to: u.id, eAlive, aAlive });
+      }catch{}
       return;
     }
   }

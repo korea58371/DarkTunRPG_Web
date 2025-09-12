@@ -24,12 +24,21 @@ nav button:hover{ border-color:var(--primary); }
 .node{ fill:#121827; stroke:#2b3a55; stroke-width:1; }
 .node.active{ stroke:#5cc8ff; }
 .node.locked{ opacity:.55; }
-.node.visited{ opacity:.6; stroke-dasharray:4 3; }
-.node.current{ stroke:#a0ff9e; stroke-width:2; }
+/* 가본 타일(과거 포함)은 기본 타일과 동일하게 보이도록 불필요한 표식을 제거 */
+.node.visited{ opacity:1; stroke-dasharray:none; }
+/* 지나온 타일(이번 회차): 일반 타일처럼 보이고 어두운 테두리 유지 */
+.node.passed{ opacity:1; stroke:#2b3a55; filter:none; }
+/* 확인했지만 이번 회차는 미진행: 불투명(어둡고 흐릿) 처리 */
+.node.historic{ opacity:.45; filter: grayscale(.2); }
+/* 현재 진행 중인 타일: 밝고 네온 그린 테두리 */
+.node.current{ stroke:#a0ff9e; stroke-width:3; box-shadow:0 0 0 2px rgba(160,255,158,.25) inset; fill:#141a26; opacity:1; }
+/* 미확인(인접) 타일: 불투명한 타일 색상 */
 .node.obf{ fill:#0f1420; stroke:#2b3a55; }
 .edge{ stroke:#2b3a55; stroke-width:2; fill:none; marker-end:url(#arrow); }
 .edge.active{ stroke:#5cc8ff; }
 .node-label{ fill:#cbd5e1; font-size:12px; pointer-events:none; }
+.node-label.dim{ color:#8b94a4; fill:#8b94a4; opacity:.7; }
+.node.obf + .node-label{ opacity:.6; }
 .lock{ fill:#ffb4b4; }
 .tooltip{ position:absolute; pointer-events:none; background:#0f1320; color:#cbd5e1; border:1px solid #2a3245; border-radius:8px; padding:6px 8px; font-size:12px; transform:translate(-50%, -120%); white-space:nowrap; box-shadow:0 6px 16px rgba(0,0,0,.4); }
 .panel{ background:#131720; border:1px solid #1f2530; border-radius:10px; padding:14px; }

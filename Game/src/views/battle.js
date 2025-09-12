@@ -33,6 +33,20 @@ export function renderBattleView(root, state){
   const B = state.ui.battleState;
   console?.log?.('[battle] mount', { btid, allies: B.allyOrder, enemies: B.enemyOrder, queue: B.queue });
 
+  // 루트 동기화: 이 전투(B.id)로 들어오는 루트가 있다면 "읽음/이번 회차 진행"으로 즉시 마킹
+  try{
+    const rIn = (state.data.routes||[]).find(rt=> rt.next === (B.id||btid));
+    if(rIn){
+      state.flags = state.flags || {};
+      state.flags.visitedRoutes = state.flags.visitedRoutes || {};
+      state.flags.runVisitedRoutes = state.flags.runVisitedRoutes || {};
+      if(!state.flags.visitedRoutes[rIn.id]) state.flags.visitedRoutes[rIn.id] = true;
+      if(!state.flags.runVisitedRoutes[rIn.id]) state.flags.runVisitedRoutes[rIn.id] = true;
+      state.flags.lastRouteId = rIn.id;
+      console.debug('[battle-sync-route]', { route:rIn.id, battle:B.id });
+    }
+  }catch{}
+
   // 적이 이미 모두 사망(또는 없음) 상태라면 즉시 클리어 처리
   try{
     if(window.BATTLE.isBattleFinished(B)){
@@ -903,7 +917,7 @@ export function renderBattleView(root, state){
     // 턴이 넘어간 후 하이라이트를 갱신
     setTurnHighlight();
     debugFinish('after-player-turn');
-    if(!B.awaitingUpgrade && window.BATTLE.isBattleFinished(B)){ console.debug('[finish] end after player turn'); return showResult(B.winner==='ally'); }
+    if(!B.awaitingUpgrade && window.BATTLE.isBattleFinished(B)){ console.debug('[finish] end after player turn', { battleId:B.id, winner:B.winner }); return showResult(B.winner==='ally'); }
     if(B.awaitingUpgrade){ console.debug('[upgrade-wait] start before enemy phase'); await new Promise(r=>{ B._awaitUpgradeResolve = r; }); debugFinish('after-upgrade-before-enemy'); if(window.BATTLE.isBattleFinished(B)){ console.debug('[finish] end after upgrade before enemy'); return showResult(B.winner==='ally'); } }
     await runEnemyPhase();
   }
@@ -947,7 +961,7 @@ export function renderBattleView(root, state){
       // 스킬 처리로 다음 턴 유닛으로 넘어갔으므로 하이라이트 갱신
       setTurnHighlight();
       debugFinish('after-enemy-turn-iteration');
-      if(window.BATTLE.isBattleFinished(B)){ console.debug('[finish] end after enemy iteration'); showResult(B.winner==='ally'); return; }
+      if(window.BATTLE.isBattleFinished(B)){ console.debug('[finish] end after enemy iteration', { battleId:B.id, winner:B.winner }); showResult(B.winner==='ally'); return; }
     }
     // 애니메이션이 모두 끝난 후에만 리렌더(연출 보존)
     if(!B.refreshScheduled){
@@ -968,6 +982,7 @@ export function renderBattleView(root, state){
     modal.innerHTML = `<h3>${isWin? '승리': '패배'}</h3><p>${isWin? '전투에서 승리했습니다.': '전투에서 패배했습니다.'}</p><div class="actions"><button class="btn" id="btnToRoutes">루트로</button></div>`;
     backdrop.appendChild(modal); frame.appendChild(backdrop);
     modal.querySelector('#btnToRoutes').onclick=()=>{
+      console.debug('[finish-click]', { isWin, battleId:B.id });
       // persist hp/mp of allies
       (B.allyOrder||[]).forEach(id=>{
         if(!id) return; const baseId = id.split('@')[0]; const u=B.units[id]; if(!u) return;
@@ -993,6 +1008,7 @@ export function renderBattleView(root, state){
       // 전투 데이터 기반 분기: winNext/loseNext가 있으면 해당 타겟으로 이동
       const btData = state.data?.battles?.[curBid];
       const nextId = isWin ? (btData?.winNext || null) : (btData?.loseNext || null);
+      console.debug('[finish-next]', { curBid, isWin, nextId, btData });
       // 이번 전투에서 사망한 아군은 보유/덱/영구 데이터에서 제거
       if(B.deadAllies && B.deadAllies.length){
         const deadSet = new Set(B.deadAllies);
@@ -1009,10 +1025,19 @@ export function renderBattleView(root, state){
       // EP로 이동하는 경우: 그 EP로 이어지는 루트를 자동 방문 처리(재선택 방지)
       if(nextId && nextId.startsWith('EP-')){
         const r = (state.data.routes||[]).find(rt=>rt.next===nextId);
-        if(r){ if(!state.flags.visitedRoutes) state.flags.visitedRoutes={}; state.flags.visitedRoutes[r.id]=true; }
+        if(r){
+          if(!state.flags.visitedRoutes) state.flags.visitedRoutes={};
+          state.flags.visitedRoutes[r.id]=true;
+          // 이번 회차 진행 기록도 함께 갱신하여 루트 UI 가시성/프론티어가 동작하도록 함
+          state.flags.runVisitedRoutes = state.flags.runVisitedRoutes || {};
+          state.flags.runVisitedRoutes[r.id] = true;
+          state.flags.lastRouteId = r.id;
+          console.debug('[finish-mark-route]', { route:r.id, forEpisode: nextId });
+        }
       }
       if(nextId){
         delete state.ui.battle; state.ui.currentEpisode = nextId;
+        console.debug('[finish-nav-episode]', { nextId });
         const btnEp = document.querySelector('nav button[data-view=episode]');
         if(btnEp){ btnEp.click(); return; }
       }

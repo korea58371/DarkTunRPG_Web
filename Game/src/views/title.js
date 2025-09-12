@@ -14,6 +14,16 @@ export function renderTitleView(root, state, onStart){
   root.innerHTML=''; root.appendChild(frame);
   frame.querySelector('#btnStartGame').onclick=()=>{
     // 첫 화면에서 시작 시, 이전 플레이 루트를 숨기지 않도록 visitedRoutes 유지
+    // 이번 회차 진행 기록(runVisitedRoutes) 초기화
+    try{
+      if(window?.appState){
+        const st = window.appState;
+        st.flags = st.flags || {};
+        // 회차 시작: 이번 회차 경로만 초기화. 과거 방문 기록은 유지
+        st.flags.runVisitedRoutes = {};
+        st.flags.lastRouteId = null;
+      }
+    }catch{}
     onStart?.();
   };
 }

@@ -4,11 +4,14 @@ import { renderTitleView } from './views/title.js';
 import { renderPartyView } from './views/party.js';
 import { renderEpisodeView } from './views/episode.js';
 import { renderBattleView } from './views/battle.js';
+import * as BATTLE from './engine/battleCore.js';
 
 const app = document.getElementById('app');
 const seedSpan = document.getElementById('seed');
 
 const state = initState();
+// 전역 바인딩: 뷰에서 엔진 함수 접근
+window.BATTLE = BATTLE;
 if (seedSpan) seedSpan.textContent = state.rng.seed;
 
 function render(view){

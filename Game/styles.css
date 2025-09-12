@@ -109,6 +109,9 @@ td,th{ border-bottom:1px solid #1f2530; padding:6px 8px; text-align:left; }
 .unit-slot.attacking{ outline:3px solid #ff3b3b; box-shadow:0 0 12px rgba(255,59,59,.5); }
 .unit-slot.is-aoe{ box-shadow:0 0 0 2px rgba(255,197,120,.55) inset, 0 0 12px rgba(255,120,80,.25) inset; position:relative; }
 .unit-slot.is-aoe::after{ content:''; position:absolute; inset:-6px; border-radius:12px; box-shadow: inset 0 0 40px rgba(255,90,60,.25); pointer-events:none; }
+.unit-slot.moving{ animation: moveSlide .24s ease-out; }
+@keyframes moveSlide{ 0%{ transform: translate(0,0);} 40%{ transform: translate(6px, -4px);} 100%{ transform: translate(0,0);} }
+.move-candidate{ outline: 2px dashed #38bdf8; box-shadow: 0 0 0 3px rgba(56,189,248,.18) inset; background: rgba(56,189,248,.10); cursor: pointer; }
 .unit-slot.death{ animation: deathFlash .3s ease-out; }
 .death-fx{ position:absolute; color:#ff3030; font-weight:900; font-size:32px; text-shadow:0 0 16px rgba(255,0,0,1); animation: skullRise 1s cubic-bezier(.15,1.8,.25,.9) forwards; transform: translate(-50%, -50%); pointer-events:none; }
 @keyframes skullRise{ 0%{ opacity:0; transform: translate(-50%, -50%) scale(.5); } 30%{ opacity:1; transform: translate(-50%, -50%) scale(1.2); } 60%{ transform: translate(-50%, -50%) scale(.95); } 100%{ opacity:.9; transform: translate(-50%, -50%) scale(1); } }

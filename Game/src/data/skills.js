@@ -1,7 +1,7 @@
 export const SKILLS = {
   // 일반 공격: 전열 단일
   // 베기: 전열 단일 + 50% 확률 3턴 출혈(틱 계수 0.3)
-  'SK-01': { id:'SK-01', name:'베기', range:'melee', type:'strike', hits:1, acc:1.0, coeff:1.0, cost:{mp:0}, shout:'하압!', damageType:'slash', bleed:{ chance:0.5, duration:3, coeff:0.3 } },
+  'SK-01': { id:'SK-01', name:'베기', range:'melee', type:'strike', hits:1, acc:1.0, coeff:1.0, cost:{mp:0}, shout:'하압!', damageType:'slash', bleed:{ chance:0.5, duration:3, coeff:0.3 }, move:{ who:'target', dir:'down', tiles:1, required:false } },
   // 마구 베기: 낮은 명중 3회타
   'SK-03': { id:'SK-03', name:'마구 베기', range:'melee', type:'multi', hits:3, acc:0.7, coeff:0.6, cost:{mp:2}, shout:'으아아앗!' },
   // 활쏘기: 원거리 기본 공격 (MP 소모 없음)
@@ -18,14 +18,16 @@ export const SKILLS = {
   // 검면치기: 근접, 타격 피해
   'SK-31': { id:'SK-31', name:'검면치기', range:'melee', type:'strike', hits:1, acc:0.95, coeff:1.1, cost:{mp:0}, shout:'받아라!', damageType:'blunt' },
   // 찌르기: 근접, 관통 피해, MP 소모 없음
-  'SK-32': { id:'SK-32', name:'찌르기', range:'melee', type:'strike', hits:1, acc:1.0, coeff:1.0, cost:{mp:0}, shout:'찔러라!', damageType:'pierce' },
+  'SK-32': { id:'SK-32', name:'찌르기', range:'melee', type:'strike', hits:1, acc:1.0, coeff:1.0, cost:{mp:0}, shout:'찔러라!', damageType:'pierce', move:{ who:'target', dir:'back', tiles:1, required:false } },
   // 필중사격: 원거리, 명중 보정 +100%, MP 2
-  'SK-33': { id:'SK-33', name:'필중사격', range:'ranged', type:'strike', hits:1, acc:2.0, accAdd:1.0, coeff:1.0, cost:{mp:2}, shout:'정확히!', damageType:'pierce' },
+  'SK-33': { id:'SK-33', name:'필중사격', range:'ranged', type:'strike', hits:1, acc:1.0, accAdd:1.0, coeff:1.0, cost:{mp:2}, shout:'정확히!', damageType:'pierce', move:{ who:'target', dir:'back', tiles:1, required:false } },
   // 독화살: 적 단일 즉발 60% + 중독(최대 HP 10%/턴, 3턴)
   'SK-22': { id:'SK-22', name:'독화살', range:'ranged', type:'poison', hits:1, acc:0.85, coeff:0.6, cost:{mp:3}, duration:3, dotPct:0.10, shout:'독을 맛봐라!' },
   // 응급 치료: 아군 단일 치유 (mag 100%)
   'SK-20': { id:'SK-20', name:'응급 치료', range:'ally', type:'heal', hits:1, acc:1, coeff:1.0, cost:{mp:3}, shout:'버텨요!' },
-  'SK-21': { id:'SK-21', name:'지속 치유', range:'ally', type:'regen', amountCoeff:0.6, duration:3, acc:1, cost:{mp:4}, shout:'당신은 괜찮아요' }
+  'SK-21': { id:'SK-21', name:'지속 치유', range:'ally', type:'regen', amountCoeff:0.6, duration:3, acc:1, cost:{mp:4}, shout:'당신은 괜찮아요' },
+  // 이동 전용(전방향 1칸) - 주인공/궁수 공용으로 넣고 각 유닛 스킬 목록에 할당
+  'SK-MOVE-1': { id:'SK-MOVE-1', name:'신속 이동', range:'ally', type:'move', cost:{mp:0}, move:{ who:'actor', allowedDirs:['forward','back','up','down','upLeft','upRight','downLeft','downRight'], tiles:1, required:true }, shout:'이동!' }
 };
 
 

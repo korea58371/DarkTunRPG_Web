@@ -74,6 +74,63 @@ export function createBattleState(state, battle){
   return { allyOrder, enemyOrder, queue, turnUnit, target:null, units, winner:null, rng: state.rng, log: [], id: battle?.id, battle, partySnapshot: (state.party.members||[]).slice(), positionsSnapshot: { ...(state.party.positions||{}) }, turn: 1, turnStartProcessedFor: null, lastTarget: {}, deadAllies: [] };
 }
 
+// Movement helpers
+function isAllyId(battleState, unitId){ return battleState.allyOrder.includes(unitId); }
+function sideUnits(battleState, unitId){ return isAllyId(battleState, unitId) ? battleState.allyOrder : battleState.enemyOrder; }
+function isOccupied(battleState, unitId, row, col){
+  const ids = sideUnits(battleState, unitId);
+  return ids.some(id=> id && id!==unitId && (battleState.units[id]?.row===row) && (battleState.units[id]?.col===col));
+}
+function clampPos(row, col){ return { row: Math.max(1, Math.min(3, row)), col: Math.max(0, Math.min(2, col)) }; }
+
+function stepDelta(dir){
+  // forward/back: 전후(행), up/down: 좌우(열)
+  if(dir==='forward') return { dr:-1, dc:0 };
+  if(dir==='back')    return { dr: 1, dc:0 };
+  if(dir==='up')      return { dr: 0, dc:-1 };
+  if(dir==='down')    return { dr: 0, dc: 1 };
+  if(dir==='upLeft')  return { dr:-1, dc:-1 };
+  if(dir==='upRight') return { dr:-1, dc: 1 };
+  if(dir==='downLeft')return { dr: 1, dc:-1 };
+  if(dir==='downRight')return{ dr: 1, dc: 1 };
+  return { dr:0, dc:0 };
+}
+
+export function previewMove(state, battleState, unitId, moveSpec){
+  if(!unitId || !moveSpec) return { steps:0, path:[], final:null };
+  const u = battleState.units[unitId]; if(!u) return { steps:0, path:[], final:null };
+  const tiles = Math.max(1, moveSpec.tiles||1);
+  const dir = moveSpec.dir||'forward';
+  const d = stepDelta(dir);
+  let cur = { row: u.row, col: u.col };
+  const path = []; let steps=0;
+  for(let i=0;i<tiles;i++){
+    const next = clampPos(cur.row + d.dr, cur.col + d.dc);
+    // out-of-bounds clampPos already handled; treat attempts beyond edge as blocked if it didn't change
+    if(next.row===cur.row && next.col===cur.col) break;
+    if(isOccupied(battleState, unitId, next.row, next.col)) break;
+    path.push({ row: next.row, col: next.col });
+    cur = next; steps++;
+  }
+  return { steps, path, final: steps>0? { row: cur.row, col: cur.col } : null };
+}
+
+export function canUseSkill(state, battleState, actorId, targetId, sk){
+  if(!sk) return false;
+  // allowedRows check
+  if(Array.isArray(sk.allowedRows) && sk.allowedRows.length){
+    const a = battleState.units[actorId]; if(!a) return false;
+    if(!sk.allowedRows.includes(a.row||2)) return false;
+  }
+  // movement requirement
+  if(sk.move && (sk.move.required!==false)){ // 기본: 필요함
+    const moverId = (sk.move.who==='actor') ? actorId : targetId;
+    const prev = previewMove(state, battleState, moverId, sk.move);
+    if(prev.steps<=0) return false;
+  }
+  return true;
+}
+
 export function pickTarget(state, battleState, isAlly, sk){
   const pool = isAlly ? battleState.enemyOrder : battleState.allyOrder;
   const selfSide = isAlly ? battleState.allyOrder : battleState.enemyOrder;
@@ -251,15 +308,52 @@ export function performSkill(state, battleState, actor, sk){
   if(mpCost>0){ actorUnit.mp = Math.max(0, (actorUnit.mp||0) - mpCost); }
   let targetId = pickTarget(state, battleState, isAlly, sk);
   if(!targetId && sk.type!=='shield' && sk.type!=='heal') return;
+  // Movement executor: 적중 후 이동(또는 순수 이동 스킬)
+  const doMove=(moverId, moveSpec)=>{
+    if(!moverId || !moveSpec) return false;
+    // __dest로 정확 좌표가 지정된 경우 그 칸이 비어있고 범위 내면 즉시 이동
+    if(moveSpec.__dest){
+      const dest = moveSpec.__dest; const u = battleState.units[moverId]; if(!u) return false;
+      const cl = clampPos(dest.row, dest.col);
+      if(cl.row!==dest.row || cl.col!==dest.col) return false;
+      if(isOccupied(battleState, moverId, cl.row, cl.col)) return false;
+      const from = { row: u.row, col: u.col };
+      battleState.log.push({ type:'move', unit: moverId, from, to: cl });
+      u.row = cl.row; u.col = cl.col; return true;
+    }
+    const prev = previewMove(state, battleState, moverId, moveSpec);
+    if(prev.steps<=0) return false;
+    const unit = battleState.units[moverId]; if(!unit) return false;
+    const from = { row: unit.row, col: unit.col };
+    const last = prev.path[prev.path.length-1];
+    battleState.log.push({ type:'move', unit: moverId, from, to: last });
+    unit.row = last.row; unit.col = last.col;
+    return true;
+  };
+
+  // 선이동(배우 이동형) 처리: 스킬 사용 시 이동 후 공격/효과 발동
+  const maybeMoveActorBefore=()=>{
+    if(!sk.move) return;
+    if(sk.move.who!=='actor') return;
+    const prev = previewMove(state, battleState, actorId, sk.move);
+    if((sk.move.required!==false) && prev.steps<=0){ return; }
+    if(prev.steps>0){ doMove(actorId, sk.move); }
+  };
+
   // Row-wide skill handling
   if(sk.type==='row'){
+    maybeMoveActorBefore();
     const targetRow = (Array.isArray(sk.to) && sk.to.length===1) ? sk.to[0] : (battleState.units[targetId]?.row || 1);
     const targets = pool.filter(id=>id && (battleState.units[id]?.row===targetRow) && (battleState.units[id]?.hp>0));
     targets.forEach(tid=>{
       const tUnit = battleState.units[tid];
-      let died=false;
+      let died=false; let moved=false;
       for(let h=0; h<(sk.hits||1); h++){
         const res = tryHitOnce(actorId, actorUnit, tid, tUnit, sk);
+        if(!res.missed && sk.move && sk.move.who==='target' && !moved){
+          const moverId = (sk.move.who==='actor') ? actorId : tid;
+          moved = doMove(moverId, sk.move);
+        }
         if(res.died){ died=true; break; }
       }
       if(died){
@@ -270,14 +364,19 @@ export function performSkill(state, battleState, actor, sk){
       }
     });
   } else if(sk.type==='line'){
+    maybeMoveActorBefore();
     // Column-wide skill (vertical line through rows). Determine column from selected target.
     const col = battleState.units[targetId]?.col ?? 0;
     const targets = pool.filter(id=>id && (battleState.units[id]?.col===col) && (battleState.units[id]?.hp>0));
     targets.forEach(tid=>{
       const tUnit = battleState.units[tid];
-      let died=false;
+      let died=false; let moved=false;
       for(let h=0; h<(sk.hits||1); h++){
         const res = tryHitOnce(actorId, actorUnit, tid, tUnit, sk);
+        if(!res.missed && sk.move && sk.move.who==='target' && !moved){
+          const moverId = (sk.move.who==='actor') ? actorId : tid;
+          moved = doMove(moverId, sk.move);
+        }
         if(res.died){ died=true; break; }
       }
       if(died){
@@ -314,15 +413,19 @@ export function performSkill(state, battleState, actor, sk){
     // 이후 자신의 턴 시작 때만 남은 횟수 만큼 회복
     target._regen = { remain: Math.max(0, (sk.duration||3) - 1), amount: perTurn };
   } else if(sk.type==='poison'){
+    maybeMoveActorBefore();
     // 즉발 피해(ATK * coeff) + 중독 부여(최대HP 10%/턴, duration)
     const target = battleState.units[targetId];
     if(target){
-      let died = false; let anyHit = false;
+      let died = false; let anyHit = false; let moved=false;
       const applyMode = sk.applyOn || 'hit';
       if(applyMode !== 'always'){
         for(let h=0; h<(sk.hits||1); h++){
           const res = tryHitOnce(actorId, actorUnit, targetId, target, sk);
-          if(!res.missed) anyHit = true;
+          if(!res.missed){
+            anyHit = true;
+            if(sk.move && sk.move.who==='target' && !moved){ doMove(targetId, sk.move); moved=true; }
+          }
           if(res.died){ died = true; break; }
         }
         if(died){
@@ -341,12 +444,21 @@ export function performSkill(state, battleState, actor, sk){
         battleState.log.push({ type:'poison', from: actorId, to: targetId, duration: dur, pct });
       }
     }
+  } else if(sk.type==='move'){
+    // 순수 이동 스킬: 지정 방향(또는 허용 방향 중 가능 방향)으로 이동만 수행
+    const moverId = actorId;
+    const dirs = Array.isArray(sk.move?.allowedDirs) && sk.move.allowedDirs.length ? sk.move.allowedDirs : [sk.move?.dir||'forward'];
+    let moved=false; for(const d of dirs){ if(doMove(moverId, { ...(sk.move||{}), dir:d })){ moved=true; break; } }
+    if(!moved && (sk.move?.required)) return;
   } else {
+    maybeMoveActorBefore();
     const target = battleState.units[targetId];
-    let died = false; let anyHit = false;
+    let died = false; let anyHit = false; let moved = false;
     for(let h=0; h<(sk.hits||1); h++){
       const res = tryHitOnce(actorId, actorUnit, targetId, target, sk);
       if(!res.missed) anyHit = true;
+      // 첫 적중 시점에 즉시 이동(대상 이동형)
+      if(!res.missed && sk.move && sk.move.who==='target' && !moved){ doMove(targetId, sk.move); moved = true; }
       if(res.died){
         died = true; break;
       }
@@ -357,6 +469,7 @@ export function performSkill(state, battleState, actor, sk){
       battleState.log.push({ type:'dead', to: targetId });
       if(battleState.allyOrder.includes(targetId)) battleState.deadAllies.push(targetId.split('@')[0]);
     }
+    // 루프 내에서 이동 처리했으므로 추가 이동 없음
     // 출혈 부여(스킬 메타에 존재할 경우): "적중 시" 확률로 적용
     if(anyHit && !died && sk.bleed && target && (battleState.rng.next() < Math.max(0, Math.min(1, sk.bleed.chance||0)))){
       const dur = Math.max(1, sk.bleed.duration||3);

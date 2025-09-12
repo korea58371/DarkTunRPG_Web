@@ -218,6 +218,22 @@ export function renderBattleView(root, state){
     if(!sk) return false;
     // MP check
     if((actor.mp||0) < (sk.cost?.mp||0)) return false;
+    // 배우 선이동이 필수인 스킬(공격/효과 동반): 이동 불가하면 사용 불가
+    if(sk.move && sk.move.who==='actor' && (sk.move.required!==false)){
+      const pv = window.BATTLE.previewMove(state, B, B.turnUnit, sk.move);
+      if(pv.steps<=0) return false;
+    }
+    // 대상 이동이 필수인 스킬: 단일 타겟일 때 미리 이동 가능성 확인
+    if(sk.move && sk.move.who==='target' && (sk.move.required!==false)){
+      // row/line은 사전 검증 스킵(실행 중 개별 대상 처리), 단일 대상만 체크
+      if(sk.type!=='row' && sk.type!=='line'){
+        if(!targetId) return false;
+        const pv = window.BATTLE.previewMove(state, B, targetId, sk.move);
+        if(pv.steps<=0) return false;
+      }
+    }
+    // 순수 이동 스킬은 타겟 불필요
+    if(sk.type==='move') return true;
     if(sk.type==='heal'){
       return !!targetId && B.allyOrder.includes(targetId) && (B.units[targetId]?.hp>0);
     }
@@ -374,7 +390,9 @@ export function renderBattleView(root, state){
       const targetText = sk.type==='row' ? (Array.isArray(sk.to)&&sk.to.length===1? `전열 전체` : `선택 라인 전체`) : (sk.range==='melee'? '근접: 가장 앞열만' : sk.range==='ranged'? '원거리: 전체 선택 가능' : (sk.to? (sk.to.includes(1)? '전열' : '후열') : '대상: 전/후열'));
       const attr = sk.damageType ? ` · 속성: ${sk.damageType==='slash'?'참격': sk.damageType==='pierce'?'관통': sk.damageType==='magic'?'마법':'타격'}` : '';
       const accDisp = Math.round((((sk.acc||1) + Math.max(0, sk.accAdd||0)) * 100));
-      const stats = `명중: ${accDisp}% (+${Math.round((Math.max(0, sk.accAdd||0))*100)}%) · 대미지: ${Math.round((sk.coeff||1)*100)}% x ${sk.hits||1}${attr}`;
+      const stats = (sk.type==='move')
+        ? `이동: 전방향 ${sk.move?.tiles||1}칸 · 전용`
+        : `명중: ${accDisp}% (+${Math.round((Math.max(0, sk.accAdd||0))*100)}%) · 대미지: ${Math.round((sk.coeff||1)*100)}% x ${sk.hits||1}${attr}`;
       const debuffLine = (()=>{
         const parts = [];
         if(sk.bleed){ parts.push(`50% 확률로 ${sk.bleed.duration||3}턴간 출혈 상태`); }
@@ -391,6 +409,11 @@ export function renderBattleView(root, state){
         refreshCardStates();
         updateAOEHighlight();
         updateTargetHints();
+        // 이동형(능동) 스킬: 이동 목적지 선택 UI 진입
+        if(sk.type==='move'){
+          enterMoveTargeting();
+          return;
+        }
         if(already && canExecute(selectedSkill, selectedTarget || B.target)){
           await executeSelectedSkill();
         } else {
@@ -403,18 +426,21 @@ export function renderBattleView(root, state){
       // Hover hint when selected
       card.onmouseenter=(e)=>{
         // 선택된 카드 힌트
-        if(selectedSkill?.id === sk.id){ window.UI_TIP?.showTooltip('한번 더 클릭 시 스킬 사용', e.clientX, e.clientY); return; }
+        if(selectedSkill?.id === sk.id){ window.UI_TIP?.showTooltip(sk.type==='move' ? '하이라이트된 칸을 클릭해 이동' : '한번 더 클릭 시 스킬 사용', e.clientX, e.clientY); return; }
         // 사용 불가 사유
         const ok= selectedTarget? isTargetValid(sk, selectedTarget || B.target) : true; if(!ok){ const reason=`[${targetText} 유닛만 선택 가능합니다]`; window.UI_TIP?.showTooltip(reason, e.clientX, e.clientY); return; }
         // 디버프 상세 툴팁
         const tipParts=[];
-        if(sk.bleed){
+        if(sk.type!=='move' && sk.bleed){
           const amt = Math.max(1, Math.round((actor.atk||0) * (sk.bleed.coeff||0.3)));
           tipParts.push(`출혈: 매 턴 시작 시 ${amt}의 고정피해 (${sk.bleed.duration||3}턴)`);
         }
-        if(sk.type==='poison' || sk.id==='SK-22'){
+        if(sk.type!=='move' && (sk.type==='poison' || sk.id==='SK-22')){
           const amt = Math.max(1, Math.round((selectedTarget? (B.units[selectedTarget]?.hpMax||0) : 0) * (state.data.skills['SK-22']?.dotPct||0.10)));
           tipParts.push(`중독: 매 턴 시작 시 ${amt}의 고정피해 (${(state.data.skills['SK-22']?.duration)||3}턴)`);
+        }
+        if(sk.type==='move'){
+          tipParts.push('이동 전용 스킬: 피해 없음');
         }
         if(tipParts.length){ window.UI_TIP?.showTooltip(tipParts.join('\n'), e.clientX, e.clientY); }
       };
@@ -465,6 +491,59 @@ export function renderBattleView(root, state){
     });
   }
 
+  // 능동 이동 스킬 목적지 선택 모드
+  function enterMoveTargeting(){
+    const sk = selectedSkill; if(!sk || sk.type!=='move') return;
+    // 클릭 가이드를 아군/적군 양쪽 격자에 표시: 배우가 이동 가능한 칸만 활성화
+    const actorId = B.turnUnit; const actorU = B.units[actorId];
+    const cand = [];
+    const dirs = Array.isArray(sk.move?.allowedDirs) && sk.move.allowedDirs.length ? sk.move.allowedDirs : ['forward','back','up','down','upLeft','upRight','downLeft','downRight'];
+    dirs.forEach(d=>{
+      const pv = window.BATTLE.previewMove(state, B, actorId, { ...(sk.move||{}), who:'actor', dir: d });
+      if(pv.steps>0 && pv.final){ cand.push(pv.final); }
+    });
+    // 중복 좌표 제거
+    const key = (p)=> `${p.row}:${p.col}`; const uniq = Array.from(new Map(cand.map(p=>[key(p), p])).values());
+    if(!uniq.length){ window.UI_TIP?.showTooltip('이동 가능한 칸이 없습니다', (cardsEl.getBoundingClientRect().left+24), (cardsEl.getBoundingClientRect().top-8)); return; }
+    // 오버레이 표시
+    function mark(tile){
+      const lane = allyLane; // 배우는 아군이므로 아군 레인
+      // grid에서 해당 row/col에 있는 유닛 슬롯 요소를 찾아야 함: 현재 그리드는 row-wrap/slot 순으로 고정 3x3
+      const rowIndex = (tile.row===1?2 : tile.row===2?1 : 0); // 렌더 순서: rear(3), mid(2), front(1)
+      const colIndex = Math.max(0, Math.min(2, tile.col||0));
+      const rowWrap = lane.querySelectorAll('.row-wrap')[colIndex];
+      if(!rowWrap) return null;
+      const slot = rowWrap.querySelectorAll('.slot')[rowIndex];
+      if(!slot) return null;
+      // 고스트 .unit-slot 대신 .slot 컨테이너를 표시/클릭 대상으로 사용
+      slot.classList.add('move-candidate');
+      slot.dataset.row = String(tile.row);
+      slot.dataset.col = String(tile.col);
+      return slot;
+    }
+    const marked = uniq.map(mark).filter(Boolean);
+    if(!marked.length){ window.UI_TIP?.showTooltip('이동 가능한 칸이 없습니다', (cardsEl.getBoundingClientRect().left+24), (cardsEl.getBoundingClientRect().top-8)); return; }
+    // 클릭 핸들러: 목적지 확정 → 스킬 즉시 실행
+    function onClickCandidate(e){
+      e.stopPropagation();
+      // 클릭된 후보의 목적지 좌표를 dataset에서 복원
+      const el = e.currentTarget; const row = Number(el.dataset.row); const col = Number(el.dataset.col);
+      const dest = { row, col };
+      window.UI_TIP?.hideTooltip();
+      // 선택된 이동 목적지를 반영한 임시 스킬로 실행(정확 좌표 지정)
+      const temp = { ...sk, move: { ...(sk.move||{}), who:'actor', tiles:1, required:true, __dest: dest } };
+      // previewMove는 dir 기반이므로, 정확 매칭이 필요하다면 dir을 dest 기준으로 산출하는 로직이 필요함.
+      // 현재는 previewMove를 다시 호출하지 않고, 엔진에서 실제 이동을 계산하므로 dir은 그대로 사용
+      B.target = B.turnUnit;
+      executeSelectedSkill(temp);
+      cleanup();
+    }
+    // 클릭 바인딩(표시 시점에 dataset 이미 주입됨)
+    marked.forEach(el=>{ el.style.cursor='pointer'; el.addEventListener('click', onClickCandidate, { once:true }); });
+    window.UI_TIP?.showTooltip('이동할 위치를 선택하세요', (cardsEl.getBoundingClientRect().left+24), (cardsEl.getBoundingClientRect().top-8));
+    function cleanup(){ marked.forEach(el=> el.classList.remove('move-candidate')); window.UI_TIP?.hideTooltip(); }
+  }
+
   // 현재 턴 하이라이트를 최신 턴 유닛으로 재지정
   function setTurnHighlight(){
     document.querySelectorAll('.unit-slot.is-turn').forEach(el=>el.classList.remove('is-turn'));
@@ -502,7 +581,23 @@ export function renderBattleView(root, state){
 
       setTimeout(()=>{
         console.debug?.('[anim]', idx, ev.type, { to: ev.to, from: ev.from, dmg: ev.dmg, crit: ev.crit, blocked: ev.blocked, isMulti: ev.isMulti, when: scheduleAt });
-        if(ev.type==='hit'){
+        if(ev.type==='move'){
+          const unitId = ev.unit; const u = B.units[unitId]; if(!u) return;
+          const lane = (B.enemyOrder.includes(unitId)? enemyLane : allyLane);
+          const slotEl = lane.querySelector(`.unit-slot[data-unit-id="${unitId}"]`);
+          console.debug?.('[move-anim]', { unitId, from: ev.from, to: ev.to, slotFound: !!slotEl });
+          if(slotEl){
+            slotEl.classList.add('moving');
+            setTimeout(()=>{
+              slotEl.classList.remove('moving');
+              // 전체 리렌더 대신 라인만 갱신하여 현재 frame/closure 유지
+              console.debug?.('[move-anim] refresh lanes after move');
+              renderRows(allyLane, B.allyOrder, 'ally');
+              renderRows(enemyLane, B.enemyOrder, 'enemy');
+              setTurnHighlight();
+            }, 240);
+          }
+        } else if(ev.type==='hit'){
           const toId = ev.to; const fromId = ev.from;
           const targetLane = (toId && toId.includes('@E')) ? enemyLane : allyLane;
           const slotEl = targetLane.querySelector(`.unit-slot[data-unit-id="${toId}"]`);
@@ -632,20 +727,22 @@ export function renderBattleView(root, state){
   document.body.appendChild(cheat);
 
   // 선택된 카드 재클릭 시 실행되는 공통 플로우
-  async function executeSelectedSkill(){
+  async function executeSelectedSkill(overrideSkill){
     if(!selectedSkill) return;
-    if(!isTargetValid(selectedSkill, B.target)){
+    const useSkill = overrideSkill || selectedSkill;
+    if(useSkill.type!=='move' && !isTargetValid(useSkill, B.target)){
       selectedSkill = null; renderCards(); return;
     }
     window.UI_TIP?.hideTooltip();
     const actorEl = (B.enemyOrder.includes(B.turnUnit)? enemyLane : allyLane).querySelector(`.unit-slot[data-unit-id="${B.turnUnit}"]`);
-    const shout = state.data.skills[selectedSkill.id]?.shout;
+    const shout = (overrideSkill?.shout) || state.data.skills[useSkill.id]?.shout;
     if(actorEl && shout){ const sp=document.createElement('div'); sp.className='speech'; sp.textContent=shout; actorEl.appendChild(sp); setTimeout(()=>sp.remove(), 1800); }
-    await new Promise(r=>setTimeout(r, 220));
-    window.BATTLE.performSkill(state, B, actor, selectedSkill);
+    // 즉시 실행: 이동/히트 연출을 지체 없이 로그에 쌓고 애니메이션 시작
+    window.BATTLE.performSkill(state, B, actor, useSkill);
+    await new Promise(r=>setTimeout(r, 10));
     B.animating = true;
     const animDelay = animateFromLog();
-    await new Promise(r=>setTimeout(r, Math.max(350, animDelay||0)));
+    await new Promise(r=>setTimeout(r, Math.max(200, animDelay||0)));
     await new Promise(r=>setTimeout(r, 500));
     document.querySelectorAll('.unit-slot .hit-badge').forEach(n=>n.remove());
     document.querySelectorAll('.unit-slot .hpbar .pred').forEach(p=>{ p.style.width='0%'; p.style.left='0%'; });
@@ -732,8 +829,6 @@ export function renderBattleView(root, state){
       const key = `bt.${B.id||'BT-010'}.win`; // B.id가 없다면 기본값
       state.flags[key] = isWin;
       delete state.ui.battleState;
-      // 승패에 맞는 다음 루트로 이동 시도
-      const nextRoute = isWin ? 'R-011' : 'R-012';
       const curBid = B.id || 'BT-010';
       // 전투 데이터 기반 분기: winNext/loseNext가 있으면 해당 타겟으로 이동
       const btData = state.data?.battles?.[curBid];

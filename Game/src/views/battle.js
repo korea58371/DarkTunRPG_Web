@@ -175,6 +175,8 @@ export function renderBattleView(root, state){
   // 선택 상태 기본값(복원 로직 제거)
   let selectedSkill = null;
   let selectedTarget = B.target || null;
+  // 이동 후보 오버레이 정리 함수 핸들
+  let cleanupMoveOverlay = null;
 
   function refreshCardStates(){
     const cards = cardsEl.querySelectorAll('.action-card');
@@ -403,6 +405,8 @@ export function renderBattleView(root, state){
       card.onclick=async (ev)=>{
         // if already selected and executable → use skill immediately
         const already = selectedSkill?.id === sk.id;
+        // 스킬 전환 시 기존 이동 오버레이 정리
+        if(cleanupMoveOverlay){ try{ cleanupMoveOverlay(); }catch{} cleanupMoveOverlay=null; }
         selectedSkill = sk;
         document.querySelectorAll('.action-card.selected').forEach(x=>x.classList.remove('selected'));
         card.classList.add('selected');
@@ -465,6 +469,8 @@ export function renderBattleView(root, state){
       const id = el.dataset.unitId;
       el.onclick = async (ev)=>{
         if(!id) return;
+        // 슬롯 클릭 시 남아있는 이동 오버레이 정리
+        if(cleanupMoveOverlay){ try{ cleanupMoveOverlay(); }catch{} cleanupMoveOverlay=null; }
         const already = (B.target===id);
         B.target=id; selectedTarget=id;
         document.querySelectorAll('.unit-slot.is-target').forEach(x=>x.classList.remove('is-target'));
@@ -494,6 +500,8 @@ export function renderBattleView(root, state){
   // 능동 이동 스킬 목적지 선택 모드
   function enterMoveTargeting(){
     const sk = selectedSkill; if(!sk || sk.type!=='move') return;
+    // 시작 전에 기존 오버레이 정리
+    if(cleanupMoveOverlay){ try{ cleanupMoveOverlay(); }catch{} cleanupMoveOverlay=null; }
     // 클릭 가이드를 아군/적군 양쪽 격자에 표시: 배우가 이동 가능한 칸만 활성화
     const actorId = B.turnUnit; const actorU = B.units[actorId];
     const cand = [];
@@ -515,11 +523,14 @@ export function renderBattleView(root, state){
       if(!rowWrap) return null;
       const slot = rowWrap.querySelectorAll('.slot')[rowIndex];
       if(!slot) return null;
-      // 고스트 .unit-slot 대신 .slot 컨테이너를 표시/클릭 대상으로 사용
-      slot.classList.add('move-candidate');
-      slot.dataset.row = String(tile.row);
-      slot.dataset.col = String(tile.col);
-      return slot;
+      // 고스트 .unit-slot을 후보 표시용으로 활성화(슬롯 크기 대신 유닛 슬롯 크기로 딱 맞춤)
+      let ghost = slot.querySelector('.unit-slot');
+      if(!ghost){ ghost = document.createElement('div'); ghost.className='unit-slot'; slot.appendChild(ghost); }
+      ghost.style.opacity = '1';
+      ghost.classList.add('move-candidate-ghost');
+      ghost.dataset.row = String(tile.row);
+      ghost.dataset.col = String(tile.col);
+      return ghost;
     }
     const marked = uniq.map(mark).filter(Boolean);
     if(!marked.length){ window.UI_TIP?.showTooltip('이동 가능한 칸이 없습니다', (cardsEl.getBoundingClientRect().left+24), (cardsEl.getBoundingClientRect().top-8)); return; }
@@ -541,7 +552,19 @@ export function renderBattleView(root, state){
     // 클릭 바인딩(표시 시점에 dataset 이미 주입됨)
     marked.forEach(el=>{ el.style.cursor='pointer'; el.addEventListener('click', onClickCandidate, { once:true }); });
     window.UI_TIP?.showTooltip('이동할 위치를 선택하세요', (cardsEl.getBoundingClientRect().left+24), (cardsEl.getBoundingClientRect().top-8));
-    function cleanup(){ marked.forEach(el=> el.classList.remove('move-candidate')); window.UI_TIP?.hideTooltip(); }
+    function cleanup(){
+      try{
+        marked.forEach(el=>{
+          el.classList.remove('move-candidate');
+          el.classList.remove('move-candidate-ghost');
+          // 유닛이 아닌 임시 고스트라면 제거
+          if(!el.dataset.unitId){ try{ el.remove(); }catch{} }
+        });
+        document.querySelectorAll('.slot.move-candidate').forEach(n=> n.classList.remove('move-candidate'));
+      }catch{}
+      window.UI_TIP?.hideTooltip();
+    }
+    cleanupMoveOverlay = cleanup;
   }
 
   // 현재 턴 하이라이트를 최신 턴 유닛으로 재지정
@@ -734,6 +757,7 @@ export function renderBattleView(root, state){
       selectedSkill = null; renderCards(); return;
     }
     window.UI_TIP?.hideTooltip();
+    if(cleanupMoveOverlay){ try{ cleanupMoveOverlay(); }catch{} cleanupMoveOverlay=null; }
     const actorEl = (B.enemyOrder.includes(B.turnUnit)? enemyLane : allyLane).querySelector(`.unit-slot[data-unit-id="${B.turnUnit}"]`);
     const shout = (overrideSkill?.shout) || state.data.skills[useSkill.id]?.shout;
     if(actorEl && shout){ const sp=document.createElement('div'); sp.className='speech'; sp.textContent=shout; actorEl.appendChild(sp); setTimeout(()=>sp.remove(), 1800); }

@@ -308,17 +308,32 @@ export function performSkill(state, battleState, actor, sk){
       }
     }
     // block / crit
-    // 강화에 의한 블록 보너스(수비측에게 적용)
+    // 블록 보너스: 검막 지속(_shieldTurns) 중에만 대상 유닛의 보너스를 적용
     let blockBonus = 0;
-    try{
-      const baseIdDef = (target.id||'').split('@')[0];
-      const spDef = state.skillProgress?.[baseIdDef]?.['SK-13'];
-      if(spDef && Array.isArray(spDef.taken)){
-        const stacks = spDef.taken.filter(x=>x==='SK13_BLOCK50').length;
-        if(stacks>0){ blockBonus += 0.5*stacks; }
-      }
-    }catch{}
+    if((target._shieldTurns||0) > 0 && typeof target._blockBonusBonus === 'number'){
+      blockBonus += target._blockBonusBonus;
+    }
     const blocked = battleState.rng.next() < clamp01(block + blockBonus);
+    // 블록 성공 시, 검막 반격 옵션 처리(대상에게 반격 태그만 남기고, 실제 반격 적용은 이후 확장 지점에서 처리 가능)
+    if(blocked && (target._shieldTurns||0)>0 && target._counterOnBlockActive){
+      // 간단한 1회 반격: 피해는 공격자 atk 기반 기본 피해 1회(과한 상호작용 방지를 위해 최소 구현)
+      try{
+        const counterSkill = { id:'SK-13@COUNTER', damageType: sk?.damageType, acc: 1, hits:1, coeff: 0.5 };
+        // 반격은 회피/블록/치명 없이 단순 적용(추후 확장 가능)
+        let dmg = calcBaseDamage(target, attacker, counterSkill);
+        let remaining = dmg;
+        if((attacker.shield||0) > 0){ const use = Math.min(attacker.shield, remaining); attacker.shield -= use; remaining -= use; }
+        attacker.hp -= remaining;
+        battleState.log.push({ type:'hit', from: target.id, to: attacker.id, dmg, crit:false, blocked:false, skill: counterSkill.id, isMulti:false, hp: attacker.hp, shield: attacker.shield||0 });
+        if(attacker.hp<=0){
+          const pool2 = (battleState.allyOrder.includes(attacker.id)) ? battleState.allyOrder : battleState.enemyOrder;
+          const idx2 = pool2.indexOf(attacker.id); if(idx2>-1) pool2[idx2]=null;
+          const qi2 = battleState.queue.indexOf(attacker.id); if(qi2>-1) battleState.queue.splice(qi2,1);
+          battleState.log.push({ type:'dead', to: attacker.id });
+          if(battleState.allyOrder.includes(attacker.id)) battleState.deadAllies.push(attacker.id.split('@')[0]);
+        }
+      }catch{}
+    }
     const isCrit = battleState.rng.next() < crit;
     let dmg = calcBaseDamage(attacker, target, skill);
     // Passive damage multiplier
@@ -431,6 +446,9 @@ export function performSkill(state, battleState, actor, sk){
     actorUnit.shield = (actorUnit.shield||0) + amt;
     // store simple duration on unit
     actorUnit._shieldTurns = Math.max(actorUnit._shieldTurns||0, dur);
+    // 업그레이드 부가 효과는 검막 지속 중에만 활성
+    if(typeof sk._blockBonus === 'number'){ actorUnit._blockBonusBonus = sk._blockBonus; }
+    if(sk._counterOnBlock === true){ actorUnit._counterOnBlockActive = true; }
     battleState.log.push({ type:'shield', from: actorId, to: actorId, amount: amt, hp: actorUnit.hp, shield: actorUnit.shield||0 });
   } else if(sk.type==='heal'){
     // heal ally single target, amount based on actor.mag and coeff
@@ -568,6 +586,20 @@ export function performSkill(state, battleState, actor, sk){
 export function applyTurnStartEffects(battleState){
   if(!battleState?.turnUnit) return;
   const u = battleState.units[battleState.turnUnit];
+  // Shield duration: decrement at owner's turn start, remove bonuses and shield on expiry
+  if(u && (u._shieldTurns||0) > 0){
+    u._shieldTurns -= 1;
+    if(u._shieldTurns <= 0){
+      u._shieldTurns = 0;
+      // clear block bonus/counter flags bound to guard
+      if(typeof u._blockBonusBonus !== 'undefined') delete u._blockBonusBonus;
+      if(u._counterOnBlockActive) delete u._counterOnBlockActive;
+      if((u.shield||0) > 0){
+        u.shield = 0;
+        battleState.log.push({ type:'shield', from: u.id, to: u.id, amount: 0, hp: u.hp, shield: 0 });
+      }
+    }
+  }
   // DOT: poison (고정 피해, 회피/블록/방어/치명 영향 없음)
   if(u && u._poison && u._poison.remain>0 && u.hp>0){
     const pct = Math.max(0, Math.min(1, u._poison.pct||0));

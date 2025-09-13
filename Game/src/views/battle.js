@@ -689,6 +689,9 @@ export function renderBattleView(root, state){
   function animateFromLog(){
     const events = B.log || [];
     if(!events.length) return 0;
+    // 애니메이션 세대 토큰: 재호출 시 이전 예약 콜백 무시
+    B._animGen = (B._animGen||0) + 1;
+    const animGen = B._animGen;
     const step = 500; // 0.5s 간격(단일 다단히트용)
     let seqDelay = 0; // 누적 지연(다단히트에만 적용)
     const needsDelay = events.some(ev=> ev.isMulti === true);

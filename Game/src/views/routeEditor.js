@@ -6,6 +6,21 @@ import { FLAGS as FLAG_REG } from '../data/flags.js';
 export function renderRouteEditorView(root, state){
   const wrap = document.createElement('section');
   wrap.className='panel';
+  // scoped styles for tabs (once)
+  try{
+    const styleId = 'routeEditorStyles';
+    if(!document.getElementById(styleId)){
+      const st = document.createElement('style'); st.id = styleId;
+      st.textContent = `
+        .tab-btn{ padding:6px 10px; border:1px solid #2b3450; background:#0f1524; color:#9aa0a6; border-radius:6px; }
+        .tab-btn:hover{ border-color:#3b4566; color:#cbd5e1; }
+        .tab-btn.active{ background:#1b2440; color:#e6f1ff; border-color:#5cc8ff; box-shadow:0 0 0 1px rgba(92,200,255,0.2) inset; }
+        .tab-pane{ animation: fadeIn 0.12s ease-in; }
+        @keyframes fadeIn{ from{ opacity:0; } to{ opacity:1; } }
+      `;
+      document.head.appendChild(st);
+    }
+  }catch{}
   wrap.innerHTML = `
     <h2>시나리오 루트 에디터</h2>
     <div class="row" style="gap:12px; align-items:flex-start;">
@@ -20,6 +35,7 @@ export function renderRouteEditorView(root, state){
           <div class="row" style="gap:6px; flex-wrap:wrap;">
             <button id="btnValidate" class="btn">검증</button>
             <button id="btnPreview" class="btn">그래프 미리보기</button>
+            <button id="btnFlags" class="btn">플래그 관리</button>
           </div>
           <div id="valOut" style="margin-top:8px; color:#9aa0a6;"></div>
         </div>
@@ -37,6 +53,8 @@ export function renderRouteEditorView(root, state){
           <button id="btnReloadBattles" class="btn">battles.js 모듈 리로드</button>
           <button id="btnWriteEpisodesJs" class="btn">episodes.js 파일에 쓰기</button>
           <button id="btnWriteBattlesJs" class="btn">battles.js 파일에 쓰기</button>
+          <button id="btnWriteFlagsJs" class="btn">flags.js 파일에 쓰기</button>
+          <button id="btnReloadFlags" class="btn">flags.js 모듈 리로드</button>
         </div>
         <div id="graph" class="panel" style="margin-top:12px; height:700px; overflow:hidden; position:relative;"></div>
       </div>
@@ -48,6 +66,7 @@ export function renderRouteEditorView(root, state){
   let routes = JSON.parse(JSON.stringify(CURRENT||[]));
   let episodes = JSON.parse(JSON.stringify(EP_CURRENT||{}));
   let battles = JSON.parse(JSON.stringify(BT_CURRENT||{}));
+  let flags = JSON.parse(JSON.stringify(FLAG_REG||{}));
   let selectedId = (routes[0]?.id)||null;
   let routesJsHandle = null;
   let dataDirHandle = null;
@@ -79,7 +98,7 @@ export function renderRouteEditorView(root, state){
     const r = routes.find(x=>x.id===selectedId) || { id:selectedId, title:selectedId, summary:'', requirements:[], next:'', branches:[] };
     const reqText = JSON.stringify(r.requirements||[], null, 2);
     const branches = Array.isArray(r.branches)? r.branches : [];
-    formEl.innerHTML = [
+    const routeCoreHTML = [
       inputRow('ID','f_id', r.id||selectedId),
       inputRow('제목','f_title', r.title||''),
       inputRow('요약','f_summary', r.summary||''),
@@ -92,9 +111,27 @@ export function renderRouteEditorView(root, state){
       `<div class="card" style="margin-top:8px;">
         <div class="row" style="justify-content:space-between; align-items:center;"><strong>분기(branches)</strong><button id="btnBranchAdd" class="btn">추가</button></div>
         <div id="branchList">${branches.map((b,i)=> branchRow(b,i)).join('')}</div>
-      </div>`,
-      linkedEditorHTML(r.next||'')
+      </div>`
     ].join('');
+    const subHTML = linkedEditorHTML(r.next||'');
+    const hasSub = !!subHTML;
+    const subLabel = (r.next||'').startsWith('EP-')? '에피소드' : ((r.next||'').startsWith('BT-')? '전투' : '연결');
+    const tabsBar = `<div class="row" id="tabBar" style="gap:6px; border-bottom:1px solid #2b3450; padding-bottom:6px; margin-bottom:8px;">
+        <button class="tab-btn active" data-tab="route">루트</button>
+        ${hasSub? `<button class=\"tab-btn\" data-tab=\"sub\">${subLabel}</button>` : ''}
+      </div>`;
+    formEl.innerHTML = `${tabsBar}
+      <div id="tab_route" class="tab-pane">${routeCoreHTML}</div>
+      ${hasSub? `<div id="tab_sub" class="tab-pane" style="display:none;">${subHTML}</div>` : ''}`;
+    // Tab behavior
+    const activate=(name)=>{
+      const rPane=formEl.querySelector('#tab_route'); const sPane=formEl.querySelector('#tab_sub');
+      formEl.querySelectorAll('.tab-btn').forEach(b=> b.classList.remove('active'));
+      const btn = formEl.querySelector(`.tab-btn[data-tab="${name}"]`); if(btn) btn.classList.add('active');
+      if(rPane) rPane.style.display = (name==='route')? 'block':'none';
+      if(sPane) sPane.style.display = (name==='sub')? 'block':'none';
+    };
+    formEl.querySelectorAll('.tab-btn').forEach(b=> b.onclick=()=> activate(b.dataset.tab));
     formEl.querySelector('#btnBranchAdd').onclick=()=>{ const cur = collectBranches(); cur.push({to:'', label:''}); renderBranchList(cur); };
     // 요구조건 렌더
     renderReqList((r.requirements&&Array.isArray(r.requirements))? r.requirements : []);
@@ -110,6 +147,19 @@ export function renderRouteEditorView(root, state){
       if(btnParty){ btnParty.onclick=()=>{ const host=formEl.querySelector('#epChoices'); const idx=host.querySelectorAll('.row').length; const unitId = (buildUnitOptions()[0]?.id)||'C-001'; const choice = { label:'동료 합류', next:'', effects:[{ type:'party.add', unit: unitId }] }; const div=document.createElement('div'); div.innerHTML=epChoiceRow(choice, idx); host.appendChild(div.firstChild); bindChoiceRowDeletes(); attachChoiceTemplateHandlers(); } }
       bindEpRowDeletes(); bindChoiceRowDeletes(); attachChoiceTemplateHandlers();
     }
+    // 전투의 승/패 EP 인라인 편집 버튼 바인딩
+    const btnWinL = formEl.querySelector('#btnEpWinAddLine');
+    const btnWinC = formEl.querySelector('#btnEpWinAddChoice');
+    const btnWinP = formEl.querySelector('#btnEpWinAddParty');
+    if(btnWinL){ btnWinL.onclick=()=>{ const host=formEl.querySelector('#epWinScene'); const idx=host.querySelectorAll('.row').length; const div=document.createElement('div'); div.innerHTML=epLineRow({speaker:'', text:''}, idx); host.appendChild(div.firstChild); bindEpRowDeletes(); }; }
+    if(btnWinC){ btnWinC.onclick=()=>{ const host=formEl.querySelector('#epWinChoices'); const idx=host.querySelectorAll('.row').length; const div=document.createElement('div'); div.innerHTML=epChoiceRow({label:'', next:'', effects:[]}, idx); host.appendChild(div.firstChild); bindChoiceRowDeletes(); attachChoiceTemplateHandlers(); }; }
+    if(btnWinP){ btnWinP.onclick=()=>{ const host=formEl.querySelector('#epWinChoices'); const idx=host.querySelectorAll('.row').length; const unitId = (buildUnitOptions()[0]?.id)||'C-001'; const choice = { label:'동료 합류', next:'', effects:[{ type:'party.add', unit: unitId }] }; const div=document.createElement('div'); div.innerHTML=epChoiceRow(choice, idx); host.appendChild(div.firstChild); bindChoiceRowDeletes(); attachChoiceTemplateHandlers(); }; }
+    const btnLoseL = formEl.querySelector('#btnEpLoseAddLine');
+    const btnLoseC = formEl.querySelector('#btnEpLoseAddChoice');
+    const btnLoseP = formEl.querySelector('#btnEpLoseAddParty');
+    if(btnLoseL){ btnLoseL.onclick=()=>{ const host=formEl.querySelector('#epLoseScene'); const idx=host.querySelectorAll('.row').length; const div=document.createElement('div'); div.innerHTML=epLineRow({speaker:'', text:''}, idx); host.appendChild(div.firstChild); bindEpRowDeletes(); }; }
+    if(btnLoseC){ btnLoseC.onclick=()=>{ const host=formEl.querySelector('#epLoseChoices'); const idx=host.querySelectorAll('.row').length; const div=document.createElement('div'); div.innerHTML=epChoiceRow({label:'', next:'', effects:[]}, idx); host.appendChild(div.firstChild); bindChoiceRowDeletes(); attachChoiceTemplateHandlers(); }; }
+    if(btnLoseP){ btnLoseP.onclick=()=>{ const host=formEl.querySelector('#epLoseChoices'); const idx=host.querySelectorAll('.row').length; const unitId = (buildUnitOptions()[0]?.id)||'C-001'; const choice = { label:'동료 합류', next:'', effects:[{ type:'party.add', unit: unitId }] }; const div=document.createElement('div'); div.innerHTML=epChoiceRow(choice, idx); host.appendChild(div.firstChild); bindChoiceRowDeletes(); attachChoiceTemplateHandlers(); }; }
   }
   function branchRow(b, i){
     return `<div class="row" data-idx="${i}" style="gap:6px; margin-top:6px;">
@@ -218,7 +268,7 @@ export function renderRouteEditorView(root, state){
   }
 
   function attachChoiceTemplateHandlers(){
-    const choiceRows = Array.from(formEl.querySelectorAll('#epChoices .row'));
+    const choiceRows = Array.from(formEl.querySelectorAll('#epChoices .row, #epWinChoices .row, #epLoseChoices .row'));
     const units = buildUnitOptions();
     choiceRows.forEach(row=>{
       const btnParty = row.querySelector('button[data-tpl="party.add"]');
@@ -253,7 +303,7 @@ export function renderRouteEditorView(root, state){
         btnFlag.onclick=()=>{
           let panel = row.querySelector('.tpl-panel');
           if(panel){ panel.remove(); return; }
-          const keys = Object.keys(FLAG_REG||{});
+          const keys = Object.keys(flags||FLAG_REG||{});
           panel = document.createElement('div'); panel.className='tpl-panel'; panel.style.marginTop='6px';
           panel.innerHTML = `<div class="row" style="gap:6px; align-items:center;">
             <select class="tpl_flag_key" style="flex:0 0 260px; padding:6px 8px; background:#0f1524; border:1px solid #2b3450; color:#cbd5e1; border-radius:6px;">
@@ -329,6 +379,22 @@ export function renderRouteEditorView(root, state){
       });
       const unitOpts = buildUnitOptions();
       const board = grid.map((row,r)=>`<div class="row" style="gap:6px;">${row.map((cell,c)=> btCellHTML(cell,r,c,unitOpts)).join('')}</div>`).join('');
+      // 승리/패배 EP 미리보기 블록(있을 경우 편집 가능)
+      const winEpId = (winNext||'').startsWith('EP-') ? winNext : '';
+      const loseEpId = (loseNext||'').startsWith('EP-') ? loseNext : '';
+      const winEp = winEpId ? (episodes[winEpId] || { scene:[{speaker:'', text:''}], choices:[{label:'', effects:[], next:''}] }) : null;
+      const loseEp = loseEpId ? (episodes[loseEpId] || { scene:[{speaker:'', text:''}], choices:[{label:'', effects:[], next:''}] }) : null;
+      const epBlock=(prefix, title, epId, ep)=>{
+        if(!epId) return '';
+        const sceneHtml = (ep.scene||[]).map((ln,i)=> epLineRow(ln,i)).join('');
+        const choiceHtml = (ep.choices||[]).map((c,i)=> epChoiceRow(c,i)).join('');
+        return `<div class="card" style="margin-top:8px;">
+          <div class="row" style="justify-content:space-between; align-items:center;"><strong>${title}: ${epId}</strong><div class="row" style="gap:6px;"><button class="btn" id="btnEp${prefix}AddLine">행 추가</button><button class="btn" id="btnEp${prefix}AddChoice">선택 추가</button><button class="btn" id="btnEp${prefix}AddParty">동료 추가</button></div></div>
+          <div id="ep${prefix}Scene">${sceneHtml}</div>
+          <div style="margin-top:8px;"><strong>선택지</strong></div>
+          <div id="ep${prefix}Choices">${choiceHtml}</div>
+        </div>`;
+      };
       return `<div class="card" style="margin-top:8px;">
         <div class="row" style="justify-content:space-between; align-items:center;"><strong>전투 편집: ${next}</strong></div>
         ${inputRow('Seed','bt_seed', bt.seed||0)}
@@ -336,6 +402,8 @@ export function renderRouteEditorView(root, state){
         ${inputRow('패배(next)','bt_lose', loseNext)}
         <div style="margin-top:8px;"><strong>3x3 배치</strong></div>
         <div id="btBoard" class="col" style="gap:6px;">${board}</div>
+        ${epBlock('Win', '승리 에피소드 편집', winEpId, winEp)}
+        ${epBlock('Lose', '패배 에피소드 편집', loseEpId, loseEp)}
       </div>`;
     }
     return `<div class="card" style="margin-top:8px;"><strong>엔딩/특수: ${next}</strong><div style="color:#9aa0a6; margin-top:4px;">특별한 편집 요소는 없습니다.</div></div>`;
@@ -398,7 +466,21 @@ export function renderRouteEditorView(root, state){
     const grid = [[null,null,null],[null,null,null],[null,null,null]];
     cells.forEach(sel=>{ const r=Number(sel.dataset.r||'0'); const c=Number(sel.dataset.c||'0'); const v=sel.value||''; const row = r + 1; grid[r][c] = v? { unit:v, row, col:c } : null; });
     const enemy=[]; for(let r=0;r<3;r++){ for(let c=0;c<3;c++){ const it=grid[r][c]; if(it) enemy.push(it); } }
+    // 승/패가 EP로 이어지면 인라인 EP 폼에서 즉시 수집하여 반영
+    if((winNext||'').startsWith('EP-')){ const winEp = readInlineEpisodeForPrefix('Win'); if(winEp){ episodes[winNext] = winEp; } }
+    if((loseNext||'').startsWith('EP-')){ const loseEp = readInlineEpisodeForPrefix('Lose'); if(loseEp){ episodes[loseNext] = loseEp; } }
     return { seed, winNext, loseNext, enemy };
+  }
+
+  // 보조: 전투 내 승/패 EP 인라인 수집
+  function readInlineEpisodeForPrefix(prefix){
+    try{
+      const sceneRows = Array.from(formEl.querySelectorAll(`#ep${prefix}Scene .row`));
+      const scene = sceneRows.map(r=>({ speaker: r.querySelector('.ep_speaker')?.value||'', text: r.querySelector('.ep_text')?.value||'' }));
+      const choiceRows = Array.from(formEl.querySelectorAll(`#ep${prefix}Choices .row`));
+      const choices = choiceRows.map(r=>{ let effects=[]; const raw=r.querySelector('.ep_effects')?.value||'[]'; try{ const v=JSON.parse(raw); if(Array.isArray(v)) effects=v; }catch{} return { label: r.querySelector('.ep_label')?.value||'', next: r.querySelector('.ep_next')?.value||'', effects }; });
+      return { scene, choices };
+    }catch{ return null; }
   }
 
   function buildGraph(rs){
@@ -546,12 +628,53 @@ export function renderRouteEditorView(root, state){
   }
   function stringifyEpisodesJS(obj){ return `export const EPISODES = ${JSON.stringify(obj, null, 2)};\n`; }
   function stringifyBattlesJS(obj){ return `export const BATTLES = ${JSON.stringify(obj, null, 2)};\n`; }
+  function stringifyFlagsJS(obj){ return `export const FLAGS = ${JSON.stringify(obj, null, 2)};\n`; }
 
   // actions
   wrap.querySelector('#btnNew').onclick=()=>{ const nid = prompt('새 루트 ID(예: R-999)'); if(!nid) return; if(routes.find(r=>r.id===nid)){ alert('이미 존재'); return; } routes.push({ id:nid, title:nid, summary:'', requirements:[], next:'', branches:[] }); selectedId=nid; renderList(); renderForm(); };
   wrap.querySelector('#btnDelete').onclick=()=>{ if(!selectedId) return; if(!confirm(`${selectedId} 삭제?`)) return; routes = routes.filter(r=> r.id!==selectedId); selectedId = routes[0]?.id||null; renderList(); renderForm(); };
   wrap.querySelector('#btnValidate').onclick=()=> validate();
   wrap.querySelector('#btnPreview').onclick=()=> drawGraph();
+  wrap.querySelector('#btnFlags').onclick=()=>{
+    const panel = document.createElement('div'); panel.className='modal-backdrop';
+    const box = document.createElement('div'); box.className='modal'; box.style.maxWidth='800px';
+    const list = Object.keys(flags||{}).sort();
+    const rows = list.map(k=>`<tr><td style="white-space:nowrap;">${k}</td><td>${flags[k]?.type||''}</td><td>${String(flags[k]?.default)}</td><td>${flags[k]?.desc||''}</td><td><button class="btn danger" data-del="${k}">삭제</button></td></tr>`).join('');
+    box.innerHTML = `<h3>플래그 관리</h3>
+      <div class="row" style="gap:6px; align-items:center;">
+        <input id="fk" placeholder="key (예: ep.EP-205.sacrifice)" style="flex:1; padding:6px 8px; background:#0f1524; border:1px solid #2b3450; color:#cbd5e1; border-radius:6px;"/>
+        <select id="ft" style="flex:0 0 140px; padding:6px 8px; background:#0f1524; border:1px solid #2b3450; color:#cbd5e1; border-radius:6px;"><option value="boolean">boolean</option><option value="number">number</option><option value="string">string</option></select>
+        <input id="fd" placeholder="default" style="flex:0 0 120px; padding:6px 8px; background:#0f1524; border:1px solid #2b3450; color:#cbd5e1; border-radius:6px;"/>
+        <input id="fs" placeholder="설명" style="flex:1; padding:6px 8px; background:#0f1524; border:1px solid #2b3450; color:#cbd5e1; border-radius:6px;"/>
+        <button id="fAdd" class="btn">추가/업데이트</button>
+      </div>
+      <div style="margin-top:8px; max-height:380px; overflow:auto;">
+        <table class="table" style="width:100%; border-collapse:collapse;">
+          <thead><tr><th>key</th><th>type</th><th>default</th><th>desc</th><th></th></tr></thead>
+          <tbody id="flagRows">${rows}</tbody>
+        </table>
+      </div>
+      <div style="margin-top:8px; color:#9aa0a6; font-size:12px;" id="flagUsage"></div>
+      <div class="row" style="justify-content:flex-end; gap:6px; margin-top:12px;"><button class="btn" id="fClose">닫기</button></div>`;
+    panel.appendChild(box); document.body.appendChild(panel);
+    box.querySelector('#fClose').onclick=()=> panel.remove();
+    box.querySelectorAll('[data-del]').forEach(btn=> btn.addEventListener('click', ()=>{ const k=btn.getAttribute('data-del'); delete flags[k]; btn.closest('tr').remove(); }));
+    box.querySelector('#fAdd').onclick=()=>{
+      const k = box.querySelector('#fk').value.trim(); const t=box.querySelector('#ft').value; const d=box.querySelector('#fd').value; const s=box.querySelector('#fs').value;
+      if(!k){ alert('key 입력'); return; }
+      let def = d; if(t==='boolean'){ def = (String(d).toLowerCase()==='true'); } else if(t==='number'){ def = Number(d||0); }
+      flags[k] = { type:t, default:def, desc:s };
+      const tr = document.createElement('tr'); tr.innerHTML=`<td>${k}</td><td>${t}</td><td>${String(def)}</td><td>${s}</td><td><button class="btn danger" data-del="${k}">삭제</button></td>`; box.querySelector('#flagRows').appendChild(tr);
+      tr.querySelector('[data-del]').onclick=()=>{ delete flags[k]; tr.remove(); };
+    };
+    // 사용처 스캔
+    try{
+      const usages = {};
+      (routes||[]).forEach(r=>{ (r.requirements||[]).forEach(rr=> walkReq(rr, (node)=>{ if(node?.type==='flag' && node.key){ (usages[node.key] ||= []).push(r.id); } })); });
+      const text = Object.keys(usages).length ? Object.entries(usages).map(([k,arr])=>`• ${k} → ${Array.from(new Set(arr)).join(', ')}`).join('<br/>') : '사용처가 감지되지 않았습니다.';
+      box.querySelector('#flagUsage').innerHTML = text;
+    }catch{}
+  };
   wrap.querySelector('#btnSave').onclick=async ()=>{
     if(!selectedId) return; // 수집 및 반영
     const r = collectRouteFromForm(); const idx = routes.findIndex(x=>x.id===selectedId); if(idx>=0) routes[idx]=r; else routes.push(r);
@@ -610,6 +733,18 @@ export function renderRouteEditorView(root, state){
       const text = `export const BATTLES = \n${body}\n;\n`;
       const w = await h.createWritable(); await w.write(text); await w.close(); alert('battles.js 저장 완료');
     }catch(e){ alert('battles.js 쓰기 실패: '+e.message); }
+  };
+  // flags 쓰기/리로드
+  wrap.querySelector('#btnWriteFlagsJs').onclick=async ()=>{
+    try{
+      let h = await getFileHandleFromDir('flags.js');
+      if(!h){ if(!window.showOpenFilePicker){ alert('파일 시스템 API 미지원'); return; } [h] = await window.showOpenFilePicker({ types:[{ description:'JavaScript', accept:{ 'text/javascript':['.js'] } }] }); }
+      const text = stringifyFlagsJS(flags);
+      const w = await h.createWritable(); await w.write(text); await w.close(); alert('flags.js 저장 완료');
+    }catch(e){ alert('flags.js 쓰기 실패: '+e.message); }
+  };
+  wrap.querySelector('#btnReloadFlags').onclick=async ()=>{
+    try{ const mod = await import(`../data/flags.js?ts=${Date.now()}`); flags = JSON.parse(JSON.stringify(mod.FLAGS||{})); alert('flags.js 모듈 리로드 완료'); }catch(e){ alert('리로드 실패: '+e.message); }
   };
   wrap.querySelector('#btnReloadRoutes').onclick=async ()=>{
     try{ const mod = await import(`../data/routes.js?ts=${Date.now()}`); state.data = state.data||{}; state.data.routes = mod.ROUTES; alert('routes.js 모듈 리로드 완료'); }catch(e){ alert('리로드 실패: '+e.message); }

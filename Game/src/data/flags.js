@@ -7,6 +7,10 @@ export const FLAGS = {
 
   // 에피소드 완료/진입 등 상태
   'ep.*.done': { type: 'boolean', default: false, desc: '에피소드 완료 여부' },
+  // 특정 에피소드 분기/선택 결과 플래그(시나리오에서 사용됨)
+  'ep.EP-205.sacrifice': { type: 'boolean', default: false, desc: 'EP-205: 동료를 제물로 바침' },
+  'ep.EP-205.noble': { type: 'boolean', default: false, desc: 'EP-205: 숭고한 희생' },
+  'ep.EP-300.seriaJoin': { type: 'boolean', default: false, desc: 'EP-300: 세리아 합류' },
 
   // 엔딩 코드
   'game.ending': { type: 'string', default: '', desc: '게임 엔딩 코드(예: END01)' },

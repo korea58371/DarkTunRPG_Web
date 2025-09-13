@@ -201,20 +201,28 @@ export function performSkill(state, battleState, actor, sk){
       const sp = state.skillProgress?.[baseId]?.[baseSkill.id];
       if(!sp || !sp.taken || !sp.taken.length) return baseSkill;
       const taken = sp.taken;
-      const count = (id)=> taken.filter(x=>x===id).length;
-      const copy = { ...baseSkill };
-      // 베기: 대미지 +30% 스택
-      if(baseSkill.id==='SK-01'){
-        const dmgStacks = count('SK01_DMG30'); if(dmgStacks>0){ copy.coeff = (copy.coeff||1) * Math.pow(1.3, dmgStacks); }
-        if(taken.includes('SK01_ROW')){ copy.type = 'row'; copy.to = [1]; }
-        if(taken.includes('SK01_BLEED')){ copy.bleed = { chance:1, duration:3, coeff:0.3 }; }
-      }
-      // 검막: 실드 +5 스택, 블록 +50%p 스택, 반격(가드 성공 시 1회 타격) once
-      if(baseSkill.id==='SK-13'){
-        const shieldStacks = count('SK13_SHIELD5'); if(shieldStacks>0){ copy.amount = (copy.amount||0) + (5*shieldStacks); }
-        const blockStacks = count('SK13_BLOCK50'); if(blockStacks>0){ copy._blockBonus = 0.5*blockStacks; }
-        if(taken.includes('SK13_COUNTER')){ copy._counterOnBlock = true; }
-      }
+      const skillDef = state.data?.skills?.[baseSkill.id];
+      const upDefs = (skillDef?.upgrades)||[];
+      const copy = JSON.parse(JSON.stringify(baseSkill));
+      // effect 적용기: { path, op:set|add|mul, value }
+      const applyEffect = (obj, eff)=>{
+        const segs = String(eff.path||'').split('.').filter(Boolean);
+        let cur = obj;
+        for(let i=0;i<segs.length-1;i++){ const k=segs[i]; if(!(k in cur)) cur[k] = {}; cur = cur[k]; }
+        const last = segs[segs.length-1];
+        const op = eff.op||'set';
+        const val = eff.value;
+        if(op==='set'){ cur[last] = val; }
+        else if(op==='add'){ cur[last] = (cur[last]||0) + Number(val||0); }
+        else if(op==='mul'){ cur[last] = (cur[last]||0) * Number(val||1); }
+      };
+      // 선택된 업그레이드들을 ID별 count로 집계하여 해당 업그레이드의 effects를 반복 적용
+      const countById = taken.reduce((m,id)=>{ m[id]=(m[id]||0)+1; return m; },{});
+      upDefs.forEach(up=>{
+        const n = countById[up.id]||0; if(!n) return;
+        const effs = up.effects||[];
+        for(let i=0;i<n;i++){ effs.forEach(eff=> applyEffect(copy, eff)); }
+      });
       return copy;
     }catch(e){ return baseSkill; }
   }
@@ -393,9 +401,8 @@ export function performSkill(state, battleState, actor, sk){
     if(prev.steps>0){ doMove(actorId, sk.move); }
   };
 
-  // Row-wide skill handling
-  if(sk.type==='row' || (sk.id==='SK-01' && (()=>{ // 베기 강화: 일열 전체로 변경
-    try{ const baseId=(actorId||'').split('@')[0]; const t=state.skillProgress?.[baseId]?.['SK-01']?.taken||[]; return t.includes('SK01_ROW'); }catch{return false;} })() ) ){
+  // Row-wide skill handling (데이터 주도: 업그레이드가 type/to를 바꿨다면 이미 sk에 반영됨)
+  if(sk.type==='row'){
     maybeMoveActorBefore();
     const targetRow = (sk.type==='row' && Array.isArray(sk.to) && sk.to.length===1) ? sk.to[0] : (battleState.units[targetId]?.row || 1);
     const targets = pool.filter(id=>id && (battleState.units[id]?.row===targetRow) && (battleState.units[id]?.hp>0));

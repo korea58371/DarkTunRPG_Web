@@ -5,9 +5,9 @@ export const SKILLS = {
   // 베기: 전열 단일 + 50% 확률 3턴 출혈(틱 계수 0.3)
   'SK-01': { id:'SK-01', name:'베기', range:'melee', type:'strike', hits:1, acc:1.0, coeff:1.0, cost:{mp:0}, shout:'하압!', damageType:'slash', bleed:{ chance:0.5, duration:3, coeff:0.3 }, move:{ who:'target', dir:'down', tiles:1, required:false },
     upgrades:[
-      { id:'SK01_ROW', name:'일열 공격', desc:'공격 범위가 전열 전체로 변경(1회 선택)', type:'once' },
-      { id:'SK01_DMG30', name:'대미지 +30%', desc:'스킬 대미지 30% 증가(중첩 가능)', type:'stack' },
-      { id:'SK01_BLEED', name:'적중 시 출혈', desc:'적중 시 3턴 출혈(계수 0.3)(1회 선택)', type:'once' }
+      { id:'SK01_ROW', name:'일열 공격', desc:'공격 범위가 전열 전체로 변경(1회 선택)', type:'once', effects:[ { path:'type', op:'set', value:'row' }, { path:'to', op:'set', value:[1] } ] },
+      { id:'SK01_DMG30', name:'대미지 +30%', desc:'스킬 대미지 30% 증가(중첩 가능)', type:'stack', effects:[ { path:'coeff', op:'mul', value:1.3 } ] },
+      { id:'SK01_BLEED', name:'적중 시 출혈', desc:'적중 시 3턴 출혈(계수 0.3)(1회 선택)', type:'once', effects:[ { path:'bleed', op:'set', value:{ chance:1, duration:3, coeff:0.3 } } ] }
     ] },
   // 마구 베기: 낮은 명중 3회타
   'SK-03': { id:'SK-03', name:'마구 베기', range:'melee', type:'multi', hits:3, acc:0.7, coeff:0.6, cost:{mp:2}, shout:'으아아앗!' },
@@ -21,9 +21,9 @@ export const SKILLS = {
   // 검막: 2턴 동안 10의 실드 부여
   'SK-13': { id:'SK-13', name:'검막', range:'melee', type:'shield', amount:10, duration:2, acc:1, coeff:0, cost:{mp:3}, shout:'막아낸다!',
     upgrades:[
-      { id:'SK13_BLOCK50', name:'막기 +50%', desc:'블록 확률 50%p 증가(중첩 가능)', type:'stack' },
-      { id:'SK13_COUNTER', name:'반격', desc:'검막 중 막기 성공 시 반격 1회(1회 선택)', type:'once' },
-      { id:'SK13_SHIELD5', name:'보호막 +5', desc:'검막 보호막 수치 +5(중첩 가능)', type:'stack' }
+      { id:'SK13_BLOCK50', name:'막기 +50%', desc:'블록 확률 50%p 증가(중첩 가능)', type:'stack', effects:[ { path:'_blockBonus', op:'add', value:0.5 } ] },
+      { id:'SK13_COUNTER', name:'반격', desc:'검막 중 막기 성공 시 반격 1회(1회 선택)', type:'once', effects:[ { path:'_counterOnBlock', op:'set', value:true } ] },
+      { id:'SK13_SHIELD5', name:'보호막 +5', desc:'검막 보호막 수치 +5(중첩 가능)', type:'stack', effects:[ { path:'amount', op:'add', value:5 } ] }
     ] },
   // 마력탄: 원거리, MP 1 소모
   'SK-30': { id:'SK-30', name:'마력탄', range:'ranged', type:'strike', hits:1, acc:1.0, coeff:1.0, cost:{mp:1}, shout:'파편이여!', damageType:'magic' },

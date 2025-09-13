@@ -29,6 +29,41 @@
 - 진행도(상태)
   - `state.skillProgress[unitBaseId][skillId] = { level, xp, nextXp, taken:[upgradeId…] }`
 
+### 데이터 구조(현행) — 업그레이드 effects 기반 일반화
+- 업그레이드는 이제 `effects` 배열로 스킬 사본에 변환 규칙을 적용한다.
+- 효과 스키마: `{ path, op, value }`
+  - `path`: 스킬 객체의 속성 경로(점 표기, 예: `coeff`, `type`, `to`, `move.tiles`, `bleed`)
+  - `op`: 연산자 — `set`(대입), `add`(가산), `mul`(곱)
+  - `value`: 적용 값(원시값/배열/객체 모두 허용)
+- stack 업그레이드는 선택 횟수만큼 `effects`를 반복 적용한다(예: `mul 1.3`이 2회면 `*1.69`).
+
+예시(JSON 발췌)
+```json
+{
+  "SK-01": {
+    "upgrades": [
+      { "id": "SK01_ROW", "type": "once",
+        "effects": [ { "path": "type", "op": "set", "value": "row" },
+                      { "path": "to",   "op": "set", "value": [1] } ] },
+      { "id": "SK01_DMG30", "type": "stack",
+        "effects": [ { "path": "coeff", "op": "mul", "value": 1.3 } ] },
+      { "id": "SK01_BLEED", "type": "once",
+        "effects": [ { "path": "bleed", "op": "set", "value": { "chance":1, "duration":3, "coeff":0.3 } } ] }
+    ]
+  },
+  "SK-13": {
+    "upgrades": [
+      { "id": "SK13_SHIELD5", "type": "stack",
+        "effects": [ { "path": "amount", "op": "add", "value": 5 } ] },
+      { "id": "SK13_BLOCK50", "type": "stack",
+        "effects": [ { "path": "_blockBonus", "op": "add", "value": 0.5 } ] },
+      { "id": "SK13_COUNTER", "type": "once",
+        "effects": [ { "path": "_counterOnBlock", "op": "set", "value": true } ] }
+    ]
+  }
+}
+```
+
 플로우(레벨업/강화 선택)
 
 ```mermaid
@@ -47,6 +82,26 @@ flowchart TD
   Continue2 --> FinishCheck
   FinishCheck -- 적 전멸 --> Win[전투 종료]
   FinishCheck -- 전투 계속 --> EndTurn
+```
+
+### 동작 플로우(데이터 주도 적용)
+```mermaid
+flowchart TD
+  A[스킬 사용 요청] --> B[스킬 원본 로드]
+  B --> C[taken 목록 수집]
+  C --> D[업그레이드 정의 조회]
+  D --> E[effects expand]
+  E --> F[사본에 순차 적용]
+  F --> G{스킬 타입}
+  G -->|row| R[대상 행 계산]
+  G -->|line| L[대상 열 계산]
+  G -->|그 외| S[단일 대상]
+  R --> H[Hit Miss check x hits]
+  L --> H
+  S --> H
+  H --> M[Apply move and extras]
+  M --> Q[Log push]
+  Q --> U[Play animation]
 ```
 
 적용 규칙(현재 구현)
@@ -72,8 +127,10 @@ UI/UX 규칙
 - 전투 뷰 마운트 시에도 전멸 자동 처리(빈 전장 방지)
 
 확장 가이드(데이터 주도화)
-- 업그레이드에 `effects` 배열을 도입해 공통 파서로 처리 권장(예: `{ path:'coeff', mul:1.3 }`, `{ path:'type', set:'row' }`, `{ addShield:5 }`, `{ addBlock:0.5 }`, `{ onBlock:{ counter:{ coeff:1.0 } } }`).
-- 현재는 SK-01, SK-13에 한해 명시 매핑되어 있으나, 위 형태로 일반화 시 스킬 추가/변경 비용이 낮아짐.
+- 현행: 업그레이드가 `effects`로 일반화되어 엔진이 공통 파서로 적용합니다.
+- 지원 연산: `set`/`add`/`mul`(필요 시 `clamp`/`round`/조건부 `when` 확장 가능).
+- 중첩 경로: `move.tiles`, `bleed`, `to[ ]` 등 임의 깊이까지 적용 가능.
+- 스킬 UI도 동일 규칙으로 미리보기(`getEffectiveSkill`)를 사용하여 하드코딩 없이 반영.
 
 테스트 체크리스트
 - [ ] miss 전부일 때 경험치 50%만 증가(지원형 제외)

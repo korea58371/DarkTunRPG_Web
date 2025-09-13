@@ -215,6 +215,30 @@ export function renderBattleView(root, state){
     try{ const baseId=(B.turnUnit||'').split('@')[0]; return (state.skillProgress?.[baseId]?.[skillId]?.taken||[]).includes(upId); }catch{return false;}
   }
 
+  // 업그레이드 적용된 실사용 스킬 미리보기(뷰 전용)
+  function getEffectiveSkill(base){
+    try{
+      if(!base) return base;
+      const actorIdLocal = B.turnUnit;
+      const baseId = (actorIdLocal||'').split('@')[0];
+      const sp = state.skillProgress?.[baseId]?.[base.id];
+      if(!sp || !sp.taken || !sp.taken.length) return base;
+      const upDefs = (state.data?.skills?.[base.id]?.upgrades)||[];
+      const copy = JSON.parse(JSON.stringify(base));
+      const applyEffect = (obj, eff)=>{
+        const segs = String(eff.path||'').split('.').filter(Boolean);
+        let cur = obj; for(let i=0;i<segs.length-1;i++){ const k=segs[i]; if(!(k in cur)) cur[k]={}; cur=cur[k]; }
+        const last = segs[segs.length-1]; const op = eff.op||'set'; const val = eff.value;
+        if(op==='set') cur[last] = val;
+        else if(op==='add') cur[last] = (cur[last]||0) + Number(val||0);
+        else if(op==='mul') cur[last] = (cur[last]||0) * Number(val||1);
+      };
+      const countById = sp.taken.reduce((m,id)=>{ m[id]=(m[id]||0)+1; return m; },{});
+      upDefs.forEach(up=>{ const n=countById[up.id]||0; for(let i=0;i<n;i++){ (up.effects||[]).forEach(e=> applyEffect(copy, e)); }});
+      return copy;
+    }catch{ return base; }
+  }
+
   function getSlotByIdOrBase(targetId){
     // 우선 정확 ID 검색
     let lane = B.enemyOrder.includes(targetId)? enemyLane : (B.allyOrder.includes(targetId)? allyLane : null);
@@ -312,16 +336,17 @@ export function renderBattleView(root, state){
     document.querySelectorAll('.unit-slot.is-aoe').forEach(el=>el.classList.remove('is-aoe'));
     if(!selectedSkill) return;
     if(selectedSkill.range==='ally') return; // no enemy AOE highlight for ally skills
-    if(selectedSkill.type==='row' || (selectedSkill.id==='SK-01' && hasUpgrade('SK-01','SK01_ROW'))){
+    const es = getEffectiveSkill(selectedSkill);
+    if(es.type==='row'){
       let targetRow = null;
-      if(selectedSkill.type==='row' && Array.isArray(selectedSkill.to) && selectedSkill.to.length===1){ targetRow = selectedSkill.to[0]; }
+      if(Array.isArray(es.to) && es.to.length===1){ targetRow = es.to[0]; }
       else if(selectedTarget){ targetRow = B.units[selectedTarget]?.row || null; }
       if(!targetRow) return;
       B.enemyOrder.forEach(id=>{ if(!id) return; const u=B.units[id]; if(!u) return; if(u.row===targetRow){ const el = enemyLane.querySelector(`.unit-slot[data-unit-id="${id}"]`); if(el) el.classList.add('is-aoe'); } });
-    } else if(selectedSkill.type==='line' && selectedTarget){
+    } else if(es.type==='line' && selectedTarget){
       const col = B.units[selectedTarget]?.col;
       B.enemyOrder.forEach(id=>{ if(!id) return; const u=B.units[id]; if(!u) return; if(u.col===col){ const el = enemyLane.querySelector(`.unit-slot[data-unit-id="${id}"]`); if(el) el.classList.add('is-aoe'); } });
-    } else if(selectedSkill.type==='strike' || selectedSkill.type==='multi' || selectedSkill.type==='poison'){
+    } else if(es.type==='strike' || es.type==='multi' || es.type==='poison'){
       if(!selectedTarget) return; const el = enemyLane.querySelector(`.unit-slot[data-unit-id="${selectedTarget}"]`); if(el) el.classList.add('is-aoe');
     }
   }

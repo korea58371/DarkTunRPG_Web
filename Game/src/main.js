@@ -3,6 +3,7 @@ import { renderRoutesView } from './views/routes.js';
 import { renderTitleView } from './views/title.js';
 import { renderPartyView } from './views/party.js';
 import { renderEpisodeView } from './views/episode.js';
+import { renderSkillEditorView } from './views/skillEditor.js';
 import { renderBattleView } from './views/battle.js';
 import * as BATTLE from './engine/battleCore.js';
 
@@ -38,6 +39,8 @@ function render(view){
           state.ui.battle = ids[0] || 'BT-100';
         }
         return renderBattleView(app, state);
+      case 'skillEditor':
+        return renderSkillEditorView(app, state);
       default: return renderRoutesView(app, state);
     }
   }catch(err){

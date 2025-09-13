@@ -116,21 +116,35 @@ export function renderRoutesView(root, state){
     const startX = ax+80, startY = ay;
     const endX = bx-80, endY = by;
     if(startY===endY){
-      // 같은 줄(Y 동일)인데 사이에 타일이 있으면 위/아래 레일로 우회(H→V→H→V)
-      const margin = 16;
+      // 같은 줄(Y 동일) 장애물 우회: 둥근 꺾임 + 도착 이전에서 꺾기
+      const r=10, margin=16;
       const between = obstacles.filter(o=> !excludeIds.includes(o.id) && o.x1 < endX && o.x2 > startX && !(o.y2 < startY || o.y1 > startY));
-      if(between.length===0){
-        return `M${startX},${startY} L${endX},${endY}`;
-      }
+      if(between.length===0){ return `M${startX},${startY} L${endX},${endY}`; }
       const topY = Math.min(...between.map(o=> o.y1));
       const botY = Math.max(...between.map(o=> o.y2));
-      // 우회 레일 후보: 위쪽이 여유 없으면 아래쪽 사용
-      let railY = topY - margin;
-      if(!(railY < startY - 8)) railY = botY + margin; // 위가 부족하면 아래로
-      // 수직 기둥 x는 시작 타일 바로 오른쪽 여백 또는 첫 장애물 왼쪽 여백 중 작은 값
+      let railY = topY - margin; if(!(railY < startY - 8)) railY = botY + margin;
       const firstBlockX1 = Math.min(...between.map(o=> o.x1));
       const railX = Math.max(startX + 24, Math.min(firstBlockX1 - margin, startX + 80));
-      return `M${startX},${startY} H${railX} V${railY} H${endX} V${endY}`;
+      const lastRight = Math.max(...between.map(o=> o.x2));
+      const bendX = Math.max(railX + 80, Math.min(endX - 60, lastRight + 40));
+      // 라운딩된 직각: 수직 세그먼트 포함(H→Q→V→Q→H→Q→V→Q→H)
+      if(railY < startY){
+        // 위로 우회 후 도착점 직전에서 내려옴
+        return `M${startX},${startY} `+
+               `H${railX} Q${railX},${startY} ${railX},${startY - r} `+
+               `V${railY + r} Q${railX},${railY} ${railX + r},${railY} `+
+               `H${bendX - r} Q${bendX},${railY} ${bendX},${railY + r} `+
+               `V${endY - r} Q${bendX},${endY} ${bendX + r},${endY} `+
+               `H${endX}`;
+      } else {
+        // 아래로 우회(필요 시)
+        return `M${startX},${startY} `+
+               `H${railX} Q${railX},${startY} ${railX},${startY + r} `+
+               `V${railY - r} Q${railX},${railY} ${railX + r},${railY} `+
+               `H${bendX - r} Q${bendX},${railY} ${bendX},${railY - r} `+
+               `V${endY + r} Q${bendX},${endY} ${bendX + r},${endY} `+
+               `H${endX}`;
+      }
     }
     const span = Math.max(0, endX - startX);
     const r = 12, baseDX = 80, minDX = 60, margin = 16;

@@ -544,7 +544,23 @@ export function renderRouteEditorView(root, state){
         const topY=Math.min(...between.map(o=>o.y1)); const botY=Math.max(...between.map(o=>o.y2));
         let railY = topY - margin; if(!(railY < startY - 8)) railY = botY + margin;
         const firstBlockX1 = Math.min(...between.map(o=>o.x1)); const railX = Math.max(startX+24, Math.min(firstBlockX1 - margin, startX + 80));
-        return `M${startX},${startY} H${railX} Q${railX},${startY} ${railX},${railY} H${endX} Q${endX},${railY} ${endX},${endY}`;
+        const lastRight = Math.max(...between.map(o=> o.x2));
+        const bendX = Math.max(railX + 80, Math.min(endX - 60, lastRight + 40));
+        if(railY < startY){
+          return `M${startX},${startY} `+
+                 `H${railX} Q${railX},${startY} ${railX},${startY - r} `+
+                 `V${railY + r} Q${railX},${railY} ${railX + r},${railY} `+
+                 `H${bendX - r} Q${bendX},${railY} ${bendX},${railY + r} `+
+                 `V${endY - r} Q${bendX},${endY} ${bendX + r},${endY} `+
+                 `H${endX}`;
+        } else {
+          return `M${startX},${startY} `+
+                 `H${railX} Q${railX},${startY} ${railX},${startY + r} `+
+                 `V${railY - r} Q${railX},${railY} ${railX + r},${railY} `+
+                 `H${bendX - r} Q${bendX},${railY} ${bendX},${railY - r} `+
+                 `V${endY + r} Q${bendX},${endY} ${bendX + r},${endY} `+
+                 `H${endX}`;
+        }
       }
       // 세로 구간과 겹치는 장애물 우회, 둥근 코너 두 번
       const yMinAll=Math.min(startY,endY)+r, yMaxAll=Math.max(startY,endY)-r; const blockers=obstacles.filter(o=> !excludeIds.includes(o.id) && !(yMaxAll<o.y1-margin || yMinAll>o.y2+margin) && (o.x2>=startX));

@@ -245,6 +245,8 @@ export function renderBattleView(root, state){
 
   function isTargetValid(sk, targetId){
     if(!sk) return false;
+    // 이동/자기강화(검막) 류는 타겟 불필요
+    if(sk.type==='move' || sk.type==='shield') return true;
     if(sk.range==='ally'){
       return !!targetId && B.allyOrder.includes(targetId) && (B.units[targetId]?.hp>0);
     }
@@ -287,8 +289,8 @@ export function renderBattleView(root, state){
         if(pv.steps<=0) return false;
       }
     }
-    // 순수 이동 스킬은 타겟 불필요
-    if(sk.type==='move') return true;
+    // 순수 이동/자기강화(검막) 스킬은 타겟 불필요
+    if(sk.type==='move' || sk.type==='shield') return true;
     if(sk.type==='heal'){
       return !!targetId && B.allyOrder.includes(targetId) && (B.units[targetId]?.hp>0);
     }
@@ -445,8 +447,8 @@ export function renderBattleView(root, state){
       if(!mpOk) card.classList.add('mp-insufficient');
       card.dataset.skillId = sk.id;
       const targetText = sk.type==='row' ? (Array.isArray(sk.to)&&sk.to.length===1? `전열 전체` : `선택 라인 전체`) : (sk.range==='melee'? '근접: 가장 앞열만' : sk.range==='ranged'? '원거리: 전체 선택 가능' : (sk.to? (sk.to.includes(1)? '전열' : '후열') : '대상: 전/후열'));
-      const attr = sk.damageType ? ` · 속성: ${sk.damageType==='slash'?'참격': sk.damageType==='pierce'?'관통': sk.damageType==='magic'?'마법':'타격'}` : '';
-      const accDisp = Math.round((((sk.acc||1) + Math.max(0, sk.accAdd||0)) * 100));
+      const accBasePct = Math.round(((sk.acc||1) * 100));
+      const accAddPct = Math.round((Math.max(0, sk.accAdd||0) * 100));
       // 스킬 진행도: 유닛별 진행도에서 조회
       const baseId = (B.turnUnit||'').split('@')[0];
       const sp = (state.skillProgress?.[baseId]?.[sk.id]) || { level:1, xp:0, nextXp: (state.data.skills?.SKILL_CFG?.baseNext||20) };
@@ -466,30 +468,50 @@ export function renderBattleView(root, state){
       const onceDone = allOnceIds.length>0 ? allOnceIds.every(id=> (sp.taken||[]).includes(id)) : false;
       const isMax = (!hasStack) && (onceDone || upAll.length===0);
       const lvLine = isMax ? `Lv.Max` : `Lv.${sp.level} (${sp.xp}/${sp.nextXp})`;
-      // 강화 적용된 설명 보정(간단 버전)
-      let info = '';
-      if(sk.type==='move'){
-        info = `이동: 전방향 ${sk.move?.tiles||1}칸 · 전용`;
-      } else {
-        // 대미지 보정(예: SK01_DMG30 스택)
-        let coeffEff = (sk.coeff||1);
-        const dmgStack = countById['SK01_DMG30']||0;
-        if(dmgStack>0){ coeffEff = Math.round((coeffEff * Math.pow(1.3, dmgStack))*100)/100; }
-        // 범위 보정(예: SK01_ROW)
-        const isRow = !!countById['SK01_ROW'] || sk.type==='row';
-        const dmgText = `${Math.round(coeffEff*100)}% x ${sk.hits||1}`;
-        const pre = `명중: ${accDisp}% (+${Math.round((Math.max(0, sk.accAdd||0))*100)}%) · 대미지: ${dmgText}${attr}`;
-        info = isRow ? `${pre} · 범위: 전열 전체` : pre;
-      }
-      const baseStats = info;
-      const stats = `${baseStats}<br>${lvLine}${upLine?`<br>${upLine}`:''}`;
-      const debuffLine = (()=>{
-        const parts = [];
-        if(sk.bleed){ parts.push(`50% 확률로 ${sk.bleed.duration||3}턴간 출혈 상태`); }
-        if(sk.type==='poison' || sk.id==='SK-22'){ parts.push(`중독 부여(${(state.data.skills['SK-22']?.duration)||3}턴)`); }
-        return parts.length? `[${parts.join(' · ')}]` : '';
+
+      // 2행: 공격 속성(범위/사거리/속성)
+      const isRowByUpgrade = (!!countById['SK01_ROW']) || sk.type==='row';
+      const rowName = (r)=> r===1? '전열' : r===2? '중열' : '후열';
+      const areaText = (function(){
+        if(sk.type==='line') return '세로열';
+        if(isRowByUpgrade){
+          if(Array.isArray(sk.to) && sk.to.length===1) return `가로열(${rowName(sk.to[0])})`;
+          return '가로열';
+        }
+        if(sk.type==='move') return '이동 전용';
+        if(sk.range==='ally' || sk.type==='heal') return '단일';
+        return '단일';
       })();
-      card.innerHTML = `<div class="title">${sk.name||sk.id}</div><div class="desc">${debuffLine}</div><div class="stats">${targetText}<br>${stats}</div><div class="cost">MP ${sk.cost?.mp||0}</div>`;
+      const rangeText = sk.range==='melee'? '근접' : sk.range==='ranged'? '원거리' : '아군';
+      const dmgTypeText = (sk.type==='move' || sk.type==='shield') ? '' : (sk.damageType==='slash'? '참격' : sk.damageType==='pierce'? '관통' : sk.damageType==='magic'? '마법' : sk.damageType==='blunt'? '타격' : (sk.type==='heal'?'지원':''));
+
+      // 3행: 명중률(보정 0%면 숨김)
+      const accLine = `명중: ${accBasePct}%` + (accAddPct>0? ` (+${accAddPct}%)` : '');
+
+      // 4행: 대미지(타수 2회 이상만 표기)
+      let coeffEff = (sk.coeff||1);
+      const dmgStack = countById['SK01_DMG30']||0;
+      if(dmgStack>0){ coeffEff = Math.round((coeffEff * Math.pow(1.3, dmgStack))*100)/100; }
+      const hits = Math.max(1, sk.hits||1);
+      const dmgPercent = `${Math.round(coeffEff*100)}%` + (hits>=2? ` x ${hits}` : '');
+      const dmgLine = (sk.type==='heal') ? `치유: ${Math.round((sk.coeff||1)*100)}%` : (sk.type==='move' || sk.type==='shield' ? `` : `대미지: ${dmgPercent}`);
+
+      // 5행: 추가 옵션(버프/디버프 등)
+      const extraLine = (()=>{
+        const parts = [];
+        if(sk.bleed){ parts.push(`출혈 ${Math.round((sk.bleed.chance||0.5)*100)}% · ${sk.bleed.duration||3}턴`); }
+        if(sk.type==='poison' || sk.id==='SK-22'){ parts.push(`중독 ${((state.data.skills['SK-22']?.duration)||3)}턴`); }
+        return parts.join(' · ');
+      })();
+
+      // 카드 마크업: 상단(이름+레벨/경험치, 우측 MP), 속성, 명중, 대미지, 추가옵션
+      const titleLine = `<div class="title"><strong>${sk.name||sk.id}</strong> <span class="lv">${lvLine}</span></div>`;
+      const attrPills = [areaText, rangeText].concat(dmgTypeText? [(dmgTypeText==='지원'? '지원' : (dmgTypeText+'대미지'))] : []);
+      const attrLine = `<div class="attr">${attrPills.map(t=>`<span class=\"pill\">${t}</span>`).join('')}</div>`;
+      const hitLine = `<div class="hit">${accLine}</div>`;
+      const dmgLineHtml = `<div class="dmg">${dmgLine}</div>`;
+      const extraHtml = extraLine? `<div class="extra">${extraLine}</div>` : '';
+      card.innerHTML = `${titleLine}${attrLine}${hitLine}${(dmgLine?dmgLineHtml:'')}${extraHtml}<div class="cost">MP ${sk.cost?.mp||0}</div>`;
       card.onclick=async (ev)=>{
         // if already selected and executable → use skill immediately
         const already = selectedSkill?.id === sk.id;

@@ -73,8 +73,8 @@ td,th{ border-bottom:1px solid #1f2530; padding:6px 8px; text-align:left; }
 .grid-enemy{ grid-template-columns: repeat(10, 40px); }
 .battle-frame{ position:relative; width:1920px; height:1080px; background:#0c0f16; border:1px solid #1f2530; border-radius:10px; overflow:hidden; }
 .battle-top{ position:absolute; top:0; left:0; right:0; height:60px; display:flex; align-items:center; justify-content:space-between; padding:10px 14px; background:linear-gradient(180deg,#0f1320,#0c0f16 70%); border-bottom:1px solid #1f2530; }
-.battle-bottom{ position:absolute; bottom:0; left:0; right:0; height:270px; padding:12px; border-top:1px solid #1f2530; background:linear-gradient(0deg,#0f1320,#0c0f16 70%); display:flex; gap:12px; }
-.battle-center{ position:absolute; top:60px; bottom:270px; left:0; right:0; display:flex; gap:12px; padding:12px; }
+.battle-bottom{ position:absolute; bottom:0; left:0; right:0; height:324px; padding:12px; border-top:1px solid #1f2530; background:linear-gradient(0deg,#0f1320,#0c0f16 70%); display:flex; gap:12px; }
+.battle-center{ position:absolute; top:60px; bottom:324px; left:0; right:0; display:flex; gap:12px; padding:12px; }
 .lane{ flex:1; border:1px solid #1a2030; border-radius:10px; padding:10px 10px 32px 10px; background:#0b0e15; position:relative; }
 .lane.ally{ box-shadow: inset 0 0 0 2px rgba(92,200,255,.08); }
 .lane.enemy{ box-shadow: inset 0 0 0 2px rgba(255,107,107,.18); }
@@ -159,11 +159,13 @@ td,th{ border-bottom:1px solid #1f2530; padding:6px 8px; text-align:left; }
 .tab{ padding:6px 10px; border:1px solid #2b3450; border-radius:8px; background:#0f1524; color:#cbd5e1; cursor:pointer; }
 .tab.active{ border-color:#5cc8ff; color:#5cc8ff; }
 .action-cards{ display:grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); gap:10px; align-items:stretch; overflow:auto; padding-right:4px; flex:1; }
-.action-card{ border:1px solid #2b3450; border-radius:10px; background:#121827; color:#e6e6e6; padding:10px; cursor:pointer; display:flex; flex-direction:column; gap:6px; min-width:220px; }
+.action-card{ border:1px solid #2b3450; border-radius:10px; background:#121827; color:#e6e6e6; padding:10px; cursor:pointer; display:flex; flex-direction:column; gap:6px; min-width:220px; position:relative; }
 .action-card .title{ font-weight:700; }
 .action-card .desc{ color:#9aa0a6; font-size:12px; min-height:32px; }
+.action-card .attr{ display:flex; gap:6px; flex-wrap:wrap; }
+.action-card .attr .pill{ padding:2px 8px; border:1px solid #2b3450; border-radius:10px; background:#0f1524; color:#cbd5e1; font-size:12px; }
 .action-card .stats{ font-size:12px; color:#cbd5e1; }
-.action-card .cost{ margin-top:auto; font-size:12px; color:#7fb0ff; }
+.action-card .cost{ position:absolute; top:8px; right:10px; font-size:12px; color:#7fb0ff; }
 .action-card.mp-insufficient .cost{ color:#ff6b6b; }
 .action-card.selected{ border-color:#5cc8ff; box-shadow:0 0 0 1px #5cc8ff inset; background:#0f1524; }
 .action-card.disabled{ opacity:.5; filter: grayscale(.15); }
@@ -198,4 +200,12 @@ td,th{ border-bottom:1px solid #1f2530; padding:6px 8px; text-align:left; }
 .speech::after{ content:''; position:absolute; bottom:-6px; left:50%; transform:translateX(-50%); border-width:6px; border-style:solid; border-color:#2b3450 transparent transparent transparent; }
 .speech::before{ content:''; position:absolute; bottom:-5px; left:50%; transform:translateX(-50%); border-width:5px; border-style:solid; border-color:#0f1524 transparent transparent transparent; }
 @keyframes speechImpact{ 0%{ opacity:0; transform: translate(-50%, -130%) scale(.6);} 35%{ opacity:1; transform: translate(-50%, -102%) scale(1.15);} 60%{ transform: translate(-50%, -100%) scale(1);} 100%{ transform: translate(-50%, -100%) scale(1);} }
+
+/* custom scrollbar (global) */
+html{ scrollbar-width: thin; scrollbar-color: #3a4258 #0e1220; }
+*::-webkit-scrollbar{ width:12px; height:12px; }
+*::-webkit-scrollbar-track{ background:#0e1220; border-left:1px solid #1f2530; }
+*::-webkit-scrollbar-thumb{ background:#3a4258; border-radius:10px; border:2px solid #0e1220; box-shadow: inset 0 0 0 1px #2b3450; }
+*::-webkit-scrollbar-thumb:hover{ background:#556083; }
+*::-webkit-scrollbar-button{ display:none; height:0; width:0; }
 

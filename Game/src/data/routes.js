@@ -7,6 +7,5 @@ export const ROUTES = [
   { id:'R-210', title:'비참한 생존', summary:'동료를 제물로 바치고 도망친 뒤의 이야기', requirements:[{"type":"flag","key":"ep.EP-205.sacrifice","value":true}], next:'EP-210', branches:[{"to":"R-300","label":"계속"}] },
   { id:'R-220', title:'배드엔딩: 숭고한 희생', summary:'동료를 지키기 위해 자신을 희생했다', requirements:[{"type":"flag","key":"ep.EP-205.noble","value":true}], next:'EP-220', branches:[] },
   { id:'R-300', title:'세리아와의 만남', summary:'치유사 세리아와 조우', requirements:[{"anyOf":[{"type":"flag","key":"bt.BT-200.win","value":true},{"type":"flag","key":"ep.EP-205.sacrifice","value":true},{"type":"flag","key":"ep.EP-210.done","value":true}]}], next:'EP-300', branches:[{"to":"R-400","label":"함께 한다"}] },
-  { id:'R-400', title:'거대 해골 보스전', summary:'거대 해골 몬스터와의 결전', requirements:[{"type":"flag","key":"ep.EP-300.seriaJoin","value":true}], next:'BT-400', branches:[] },
-  { id:'R-500', title:'테스트 루트', summary:'테스트', requirements:[], next:'', branches:[] }
+  { id:'R-400', title:'거대 해골 보스전', summary:'거대 해골 몬스터와의 결전', requirements:[{"type":"flag","key":"ep.EP-300.seriaJoin","value":true}], next:'BT-400', branches:[] }
 ];

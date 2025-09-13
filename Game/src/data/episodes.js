@@ -73,13 +73,26 @@ export const EPISODES = {
       },
       {
         "speaker": "주인공",
-        "text": "저건... 짐승의 울음소리인가?"
+        "text": "으음... 기억이... 아무것도 나지를 않는군."
+      },
+      {
+        "speaker": "소리",
+        "text": "크르릉..."
+      },
+      {
+        "speaker": "주인공",
+        "text": "이건... 짐승의 울음소리인가?"
       }
     ],
     "choices": [
       {
         "label": "소리를 향해 이동한다.",
         "next": "R-100",
+        "effects": []
+      },
+      {
+        "label": "우선 신중하게 상황을 살피자.",
+        "next": "R-101",
         "effects": []
       }
     ]

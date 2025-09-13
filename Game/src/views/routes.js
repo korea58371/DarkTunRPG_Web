@@ -116,7 +116,21 @@ export function renderRoutesView(root, state){
     const startX = ax+80, startY = ay;
     const endX = bx-80, endY = by;
     if(startY===endY){
-      return `M${startX},${startY} L${endX},${endY}`;
+      // 같은 줄(Y 동일)인데 사이에 타일이 있으면 위/아래 레일로 우회(H→V→H→V)
+      const margin = 16;
+      const between = obstacles.filter(o=> !excludeIds.includes(o.id) && o.x1 < endX && o.x2 > startX && !(o.y2 < startY || o.y1 > startY));
+      if(between.length===0){
+        return `M${startX},${startY} L${endX},${endY}`;
+      }
+      const topY = Math.min(...between.map(o=> o.y1));
+      const botY = Math.max(...between.map(o=> o.y2));
+      // 우회 레일 후보: 위쪽이 여유 없으면 아래쪽 사용
+      let railY = topY - margin;
+      if(!(railY < startY - 8)) railY = botY + margin; // 위가 부족하면 아래로
+      // 수직 기둥 x는 시작 타일 바로 오른쪽 여백 또는 첫 장애물 왼쪽 여백 중 작은 값
+      const firstBlockX1 = Math.min(...between.map(o=> o.x1));
+      const railX = Math.max(startX + 24, Math.min(firstBlockX1 - margin, startX + 80));
+      return `M${startX},${startY} H${railX} V${railY} H${endX} V${endY}`;
     }
     const span = Math.max(0, endX - startX);
     const r = 12, baseDX = 80, minDX = 60, margin = 16;
@@ -252,72 +266,85 @@ export function renderRoutesView(root, state){
 function buildGraph(state){
   const nodes = state.data.routes.map(r=>({ id:r.id, title:r.title, summary:r.summary, requirements:r.requirements, next:r.next, branches:r.branches||[] }));
   const edges = [];
-  // 분기 엣지
+  const order = Object.fromEntries(state.data.routes.map((r,i)=>[r.id,i]));
+  // 분기 엣지(명시적 branches)
   nodes.forEach(r=>{ (r.branches||[]).forEach(b=>{ if(b.to?.startsWith('R-')) edges.push({ from:r.id, to:b.to, label:b.label||'' }); }); });
-  // 메인 진행 엣지: 실제 next가 루트(R-***)일 때만 연결
+  // 메인 진행 엣지: next가 루트(R-***)일 때만 연결
   nodes.forEach(r=>{ if((r.next||'').startsWith('R-')) edges.push({ from:r.id, to:r.next, label:'진행' }); });
+  // 에피소드 선택지 기반 엣지: next가 EP-***이면 해당 EP의 choices 중 R-***로 가는 것들을 연결
+  nodes.forEach(r=>{
+    if((r.next||'').startsWith('EP-')){
+      try{
+        const ep = (state.data.episodes||{})[r.next]; const choices = ep?.choices||[];
+        choices.forEach(c=>{
+          const to = c?.next||'';
+          if(to.startsWith('R-')){
+            // 뒤로 가는 간선은 UI/레이아웃에서 제외(예: 배드엔딩에서 프롤로그로)
+            if(order[to] > (order[r.id] ?? -1)) edges.push({ from:r.id, to, label: c.label||'' });
+          }
+        });
+      }catch{}
+    }
+  });
   return { nodes, edges };
 }
 
 function layoutRightHierarchical(graph, size, anchorId){
   const width = size?.width||2000, height=size?.height||1100;
   const xGap = 260, yGap = 140; // 기본 간격
-  const nodesById = Object.fromEntries(graph.nodes.map(n=>[n.id,n]));
-  const nextsByFrom = graph.edges.reduce((m,e)=>{ (m[e.from] ||= []).push(e.to); return m; },{});
-  // 1) 메인 스파인 계산(R-001부터 next 체인)
+  // 인접/역방향 제거된 간선 기준 인접 리스트
+  const outsAll = graph.edges.reduce((m,e)=>{ (m[e.from] ||= []).push(e.to); return m; },{});
+  Object.keys(outsAll).forEach(k=> outsAll[k] = Array.from(new Set(outsAll[k])));
+  const insAll = graph.edges.reduce((m,e)=>{ (m[e.to] ||= []).push(e.from); return m; },{});
+  // 1) 시작 노드
   const start = anchorId || graph.nodes[0]?.id;
-  const main = []; const seen = new Set(); let cur = start;
-  while(cur && !seen.has(cur)){
-    seen.add(cur); main.push(cur);
-    const r = nodesById[cur];
-    const nx = (r?.next||'').startsWith('R-') ? r.next : null;
-    cur = nx;
+  // 2) 깊이(BFS) 계산: childDepth >= parentDepth+1 보장
+  const depth = new Map(graph.nodes.map(n=>[n.id, Number.NEGATIVE_INFINITY]));
+  depth.set(start, 0);
+  const q = [start];
+  while(q.length){
+    const u = q.shift();
+    const du = depth.get(u);
+    for(const v of (outsAll[u]||[])){
+      const cand = du + 1;
+      if(cand > (depth.get(v)?? Number.NEGATIVE_INFINITY)){
+        depth.set(v, cand); q.push(v);
+      }
+    }
   }
-  // 2) X 좌표: 메인은 순서대로, 브랜치는 parentX+1
-  const xOf = new Map(main.map((id,i)=>[id, 140 + i*xGap]));
-  const assignX = (id)=>{
-    if(xOf.has(id)) return xOf.get(id);
-    const parents = Object.keys(nextsByFrom).filter(k=> (nextsByFrom[k]||[]).includes(id));
-    const px = parents.length? (assignX(parents[0]) + xGap) : 140; // 재결합은 첫 부모 기준
-    xOf.set(id, px); return px;
-  };
-  graph.nodes.forEach(n=> assignX(n.id));
-  // 2-1) 단조 증가 보정: 모든 엣지에 대해 childX >= parentX + xGap 유지
-  const outs = nextsByFrom;
-  const shiftRight=(id,delta)=>{
-    const curX = xOf.get(id)||140; const nx = curX + delta; if(nx<=curX) return;
-    xOf.set(id, nx); (outs[id]||[]).forEach(to=>{
-      const need = xOf.get(id) + xGap - (xOf.get(to)||140);
-      if(need>0) shiftRight(to, need);
-    });
-  };
-  graph.edges.forEach(e=>{ const need = (xOf.get(e.from)||140) + xGap - (xOf.get(e.to)||140); if(need>0) shiftRight(e.to, need); });
-  // 3) Y 좌표: 부모-자식 군집으로 DFS 배치
-  const roots = [start];
+  // 도달하지 못한 노드는 0으로 스냅
+  graph.nodes.forEach(n=>{ if(!Number.isFinite(depth.get(n.id))) depth.set(n.id, 0); });
+  // 3) X 좌표 = 140 + depth*xGap
+  const xOf = new Map(graph.nodes.map(n=>[n.id, 140 + (depth.get(n.id)||0)*xGap]));
+  // 4) 메인 경로 찾기: 진행 라벨 우선 → 같은 깊이에서 가장 작은 x
+  const byId = Object.fromEntries(graph.nodes.map(n=>[n.id,n]));
+  const edgeFrom = graph.edges.reduce((m,e)=>{ (m[e.from] ||= []).push(e); return m; },{});
+  const main = []; let cur = start; const seen = new Set();
+  while(cur && !seen.has(cur)){
+    main.push(cur); seen.add(cur);
+    const es = (edgeFrom[cur]||[]);
+    // 진행 라벨 우선, 그 외엔 가장 오른쪽(깊이+1) 후보 중 정렬 우선
+    const forward = es.filter(e=> (depth.get(e.to) === depth.get(cur)+1));
+    const prefer = forward.find(e=> e.label==='진행') || forward.sort((a,b)=> (xOf.get(a.to)-xOf.get(b.to)))[0];
+    cur = prefer?.to || null;
+  }
+  // 5) Y 좌표: 부모-자식(다음 칼럼만) 군집 DFS
   const yOf = new Map(); let cursorY = 160;
   const dfs=(id)=>{
-    const kids = (nextsByFrom[id]||[]).filter(c=> c!==id);
+    if(yOf.has(id)) return yOf.get(id);
+    const kids = (outsAll[id]||[]).filter(c=> depth.get(c) === depth.get(id)+1);
     if(kids.length===0){ const y=cursorY; yOf.set(id,y); cursorY+=yGap; return y; }
     const ys = kids.map(dfs);
     const mid = Math.floor((Math.min(...ys)+Math.max(...ys))/2);
     yOf.set(id, mid); return mid;
   };
-  roots.forEach(dfs);
-  // 4) 나머지(재결합 등) 노드 Y 스냅: 최초 부모들의 중간으로
-  graph.nodes.forEach(n=>{
-    if(!yOf.has(n.id)){
-      const parents = Object.keys(nextsByFrom).filter(k=> (nextsByFrom[k]||[]).includes(n.id));
-      const ys = parents.map(p=> yOf.get(p)).filter(v=> typeof v==='number');
-      const y = ys.length? Math.floor(ys.reduce((a,b)=>a+b,0)/ys.length) : cursorY;
-      if(!ys.length) cursorY+=yGap;
-      yOf.set(n.id, y);
-    }
-  });
-  // 4-1) 메인 스파인 Y 고정: 시작 노드의 Y로 전부 스냅(브랜치 존재로 부모 평균이 내려가는 현상 방지)
-  const mainSet = new Set(main);
-  const baseMainY = (typeof yOf.get(start)==='number') ? yOf.get(start) : 160;
-  main.forEach(id=>{ yOf.set(id, baseMainY); });
-  // 5) 결과
+  dfs(start);
+  // 도달하지 못한 노드의 Y는 순차 배치
+  graph.nodes.forEach(n=>{ if(!yOf.has(n.id)){ const y=cursorY; yOf.set(n.id,y); cursorY+=yGap; } });
+  // 6) 메인 라인 Y 고정
+  const baseMainY = yOf.get(start) ?? 160;
+  main.forEach(id=> yOf.set(id, baseMainY));
+  // 7) 결과
   return graph.nodes.map(n=>({ id:n.id, title:n.title, x:xOf.get(n.id), y:yOf.get(n.id) }));
 }
 

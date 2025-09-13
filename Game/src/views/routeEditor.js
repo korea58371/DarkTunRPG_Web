@@ -261,8 +261,18 @@ export function renderRouteEditorView(root, state){
   }
 
   function bindEpRowDeletes(){
-    formEl.querySelectorAll('.ep_line_del').forEach(btn=>{ btn.onclick=()=>{ const row=btn.closest('.row'); row?.remove(); }; });
+    formEl.querySelectorAll('.ep_line_del').forEach(btn=>{ btn.onclick=()=>{ const row=btn.closest('.row'); row?.remove(); renumberScene(); }; });
+    // Drag & drop reorder for scene lines
+    const host=formEl.querySelector('#epScene'); if(host){
+      let dragging=null;
+      host.querySelectorAll('.ep_line').forEach(line=>{
+        line.addEventListener('dragstart', (e)=>{ dragging=line; line.style.opacity='0.5'; });
+        line.addEventListener('dragend', ()=>{ if(dragging){ dragging.style.opacity=''; dragging=null; renumberScene(); }});
+        line.addEventListener('dragover', (e)=>{ e.preventDefault(); if(!dragging||dragging===line) return; const rect=line.getBoundingClientRect(); const before = (e.clientY - rect.top) < rect.height/2; host.insertBefore(dragging, before? line : line.nextSibling); });
+      });
+    }
   }
+  function renumberScene(){ const rows=Array.from(formEl.querySelectorAll('#epScene .ep_line')); rows.forEach((row,i)=> row.dataset.idx=String(i)); }
   function bindChoiceRowDeletes(){
     formEl.querySelectorAll('.ep_ch_del').forEach(btn=>{ btn.onclick=()=>{ const row=btn.closest('.row'); row?.remove(); }; });
   }
@@ -409,7 +419,8 @@ export function renderRouteEditorView(root, state){
     return `<div class="card" style="margin-top:8px;"><strong>엔딩/특수: ${next}</strong><div style="color:#9aa0a6; margin-top:4px;">특별한 편집 요소는 없습니다.</div></div>`;
   }
   function epLineRow(line, i){
-    return `<div class="row" data-idx="${i}" style="gap:6px; margin-top:6px;">
+    return `<div class="row ep_line" draggable="true" data-idx="${i}" style="gap:6px; margin-top:6px;">
+      <span class="drag-handle" style="cursor:grab; color:#9aa0a6;">↕</span>
       <input class="ep_speaker" placeholder="speaker" value="${line?.speaker||''}" style="flex:0 0 140px; padding:6px 8px; background:#0f1524; border:1px solid #2b3450; color:#cbd5e1; border-radius:6px;"/>
       <input class="ep_text" placeholder="text" value="${line?.text||''}" style="flex:1; padding:6px 8px; background:#0f1524; border:1px solid #2b3450; color:#cbd5e1; border-radius:6px;"/>
       <button class="btn danger ep_line_del">삭제</button>
@@ -486,31 +497,62 @@ export function renderRouteEditorView(root, state){
   function buildGraph(rs){
     const nodes = rs.map(r=>({ id:r.id, title:r.title, next:r.next, branches:r.branches||[] }));
     const edges = [];
+    const order = Object.fromEntries(rs.map((r,i)=>[r.id,i]));
     nodes.forEach(r=>{ (r.branches||[]).forEach(b=>{ if(b.to?.startsWith('R-')) edges.push({ from:r.id, to:b.to }); }); });
     nodes.forEach(r=>{ if((r.next||'').startsWith('R-')) edges.push({ from:r.id, to:r.next }); });
+    // EP 선택지 기반 간선: 편집 폼 데이터(episodes)에서 to가 뒤 칼럼(정의 순서상 이후)인 것만 표시
+    nodes.forEach(r=>{
+      if((r.next||'').startsWith('EP-')){
+        try{
+          const ep = (episodes||{})[r.next]; const choices = ep?.choices||[];
+          choices.forEach(c=>{ const to=c?.next||''; if(to.startsWith('R-') && (order[to] > (order[r.id]??-1))) edges.push({ from:r.id, to }); });
+        }catch{}
+      }
+    });
     return { nodes, edges };
   }
   function layout(graph){
-    const xGap=260, yGap=120; const start=graph.nodes[0]?.id; const nexts={}; graph.edges.forEach(e=>{ (nexts[e.from] ||= []).push(e.to); });
-    const xOf=new Map(), yOf=new Map(); const seen=new Set(); let cur=start; const main=[];
-    while(cur && !seen.has(cur)){ seen.add(cur); main.push(cur); const n=graph.nodes.find(n=>n.id===cur); const nx=(n?.next||'').startsWith('R-')? n.next:null; cur=nx; }
-    main.forEach((id,i)=> xOf.set(id,140+i*xGap));
-    const assignX=(id)=>{ if(xOf.has(id)) return xOf.get(id); const parents=Object.keys(nexts).filter(k=> (nexts[k]||[]).includes(id)); const px=parents.length? (assignX(parents[0])+xGap) : 140; xOf.set(id,px); return px; };
-    graph.nodes.forEach(n=> assignX(n.id));
-    // push right to avoid overlap
-    const shiftRight=(id,delta)=>{ const cur=xOf.get(id)||140; const nx=cur+delta; if(nx<=cur) return; xOf.set(id,nx); (nexts[id]||[]).forEach(to=>{ const need = xOf.get(id)+xGap-(xOf.get(to)||140); if(need>0) shiftRight(to,need); }); };
-    graph.edges.forEach(e=>{ const need = (xOf.get(e.from)||140)+xGap - (xOf.get(e.to)||140); if(need>0) shiftRight(e.to, need); });
-    // Y by DFS
-    let cy=160; const dfs=(id)=>{ const kids=(nexts[id]||[]).filter(k=>k!==id); if(kids.length===0){ const y=cy; yOf.set(id,y); cy+=yGap; return y; } const ys=kids.map(dfs); const mid=Math.floor((Math.min(...ys)+Math.max(...ys))/2); yOf.set(id,mid); return mid; };
-    if(start) dfs(start); graph.nodes.forEach(n=>{ if(!yOf.has(n.id)){ yOf.set(n.id, cy); cy+=yGap; }});
+    const xGap=260, yGap=120; const start=graph.nodes[0]?.id;
+    const outs = graph.edges.reduce((m,e)=>{ (m[e.from] ||= []).push(e.to); return m; },{});
+    Object.keys(outs).forEach(k=> outs[k]=Array.from(new Set(outs[k])));
+    // 깊이(BFS)
+    const depth=new Map(graph.nodes.map(n=>[n.id, Number.NEGATIVE_INFINITY])); depth.set(start,0);
+    const q=[start]; while(q.length){ const u=q.shift(); const du=depth.get(u); for(const v of (outs[u]||[])){ const cand=du+1; if(cand>(depth.get(v)??-1)){ depth.set(v,cand); q.push(v); } } }
+    graph.nodes.forEach(n=>{ if(!Number.isFinite(depth.get(n.id))) depth.set(n.id,0); });
+    const xOf=new Map(graph.nodes.map(n=>[n.id, 140 + (depth.get(n.id)||0)*xGap]));
+    // 메인 라인(진행 우선)
+    const edgeFrom = graph.edges.reduce((m,e)=>{ (m[e.from] ||= []).push(e); return m; },{});
+    const main=[]; let cur=start; const seen=new Set(); while(cur && !seen.has(cur)){ main.push(cur); seen.add(cur); const es=(edgeFrom[cur]||[]).filter(e=> depth.get(e.to)===depth.get(cur)+1); const prefer = es.find(e=> e.label==='진행') || es.sort((a,b)=> xOf.get(a.to)-xOf.get(b.to))[0]; cur = prefer?.to || null; }
+    // Y: 다음 칼럼 자식만 군집
+    const yOf=new Map(); let cy=160; const dfs=(id)=>{ if(yOf.has(id)) return yOf.get(id); const kids=(outs[id]||[]).filter(v=> depth.get(v)===depth.get(id)+1); if(kids.length===0){ const y=cy; yOf.set(id,y); cy+=yGap; return y; } const ys=kids.map(dfs); const mid=Math.floor((Math.min(...ys)+Math.max(...ys))/2); yOf.set(id,mid); return mid; };
+    if(start) dfs(start); graph.nodes.forEach(n=>{ if(!yOf.has(n.id)){ const y=cy; yOf.set(n.id,y); cy+=yGap; } });
+    const baseMainY=yOf.get(start)||160; main.forEach(id=> yOf.set(id, baseMainY));
     return graph.nodes.map(n=>({ id:n.id, title:n.title, x:xOf.get(n.id)||140, y:yOf.get(n.id)||160 }));
   }
   function drawGraph(){
     const host = wrap.querySelector('#graph'); host.innerHTML='';
     const svg = document.createElementNS('http://www.w3.org/2000/svg','svg'); svg.classList.add('route-graph'); svg.style.width='100%'; svg.style.height='100%';
     const g = buildGraph(routes); const nodes = layout(g); const content = document.createElementNS('http://www.w3.org/2000/svg','g'); svg.appendChild(content);
-    const edges = g.edges; const mkPath=(ax,ay,bx,by)=>`M${ax+80},${ay} H${bx-80}`;
-    edges.forEach(e=>{ const a=nodes.find(n=>n.id===e.from); const b=nodes.find(n=>n.id===e.to); if(!a||!b) return; const p=document.createElementNS('http://www.w3.org/2000/svg','path'); p.setAttribute('d', mkPath(a.x,a.y,b.x,b.y)); p.setAttribute('class','edge'); content.appendChild(p); });
+    const edges = g.edges;
+    // 장애물(노드) 목록
+    const obstacles = nodes.map(n=>({ id:n.id, x1:n.x-80, x2:n.x+80, y1:n.y-30, y2:n.y+30 }));
+    const mkRoundedPath=(ax,ay,bx,by, excludeIds=[])=>{
+      const startX=ax+80, startY=ay; const endX=bx-80, endY=by; const r=10, margin=14;
+      if(startY===endY){
+        const between = obstacles.filter(o=> !excludeIds.includes(o.id) && o.x1<endX && o.x2>startX && !(o.y2<startY || o.y1>startY));
+        if(between.length===0) return `M${startX},${startY} L${endX},${endY}`;
+        const topY=Math.min(...between.map(o=>o.y1)); const botY=Math.max(...between.map(o=>o.y2));
+        let railY = topY - margin; if(!(railY < startY - 8)) railY = botY + margin;
+        const firstBlockX1 = Math.min(...between.map(o=>o.x1)); const railX = Math.max(startX+24, Math.min(firstBlockX1 - margin, startX + 80));
+        return `M${startX},${startY} H${railX} Q${railX},${startY} ${railX},${railY} H${endX} Q${endX},${railY} ${endX},${endY}`;
+      }
+      // 세로 구간과 겹치는 장애물 우회, 둥근 코너 두 번
+      const yMinAll=Math.min(startY,endY)+r, yMaxAll=Math.max(startY,endY)-r; const blockers=obstacles.filter(o=> !excludeIds.includes(o.id) && !(yMaxAll<o.y1-margin || yMinAll>o.y2+margin) && (o.x2>=startX));
+      let x1=Math.max(startX+80, ...(blockers.map(b=> b.x2+margin))); x1=Math.min(x1, endX-60);
+      const dirDown=endY>startY; const yCorner1=startY + (dirDown? r : -r); const yCorner2=endY - (dirDown? r : -r);
+      return `M${startX},${startY} H${x1-r} Q${x1},${startY} ${x1},${yCorner1} V${yCorner2} Q${x1},${endY} ${x1+r},${endY} H${endX}`;
+    };
+    edges.forEach(e=>{ const a=nodes.find(n=>n.id===e.from); const b=nodes.find(n=>n.id===e.to); if(!a||!b) return; const p=document.createElementNS('http://www.w3.org/2000/svg','path'); p.setAttribute('d', mkRoundedPath(a.x,a.y,b.x,b.y, [a.id,b.id])); p.setAttribute('class','edge'); content.appendChild(p); });
     nodes.forEach(n=>{ const r=document.createElementNS('http://www.w3.org/2000/svg','rect'); r.setAttribute('x', n.x-80); r.setAttribute('y', n.y-30); r.setAttribute('width',160); r.setAttribute('height',60); r.setAttribute('rx',10); const cls=['node']; if(selectedId && n.id===selectedId) cls.push('current'); r.setAttribute('class',cls.join(' ')); const t=document.createElementNS('http://www.w3.org/2000/svg','text'); t.setAttribute('x', n.x); t.setAttribute('y', n.y+6); t.setAttribute('text-anchor','middle'); t.textContent=n.title||n.id; const onPick=()=>{ selectedId=n.id; renderList(); renderForm(); drawGraph(); }; r.style.cursor='pointer'; t.style.cursor='pointer'; r.addEventListener('click', onPick); t.addEventListener('click', onPick); content.appendChild(r); content.appendChild(t); });
     // world bounds
     const minX = Math.min(...nodes.map(n=>n.x-100), 0), minY = Math.min(...nodes.map(n=>n.y-60), 0);

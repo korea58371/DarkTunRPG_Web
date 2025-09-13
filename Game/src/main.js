@@ -5,6 +5,7 @@ import { renderPartyView } from './views/party.js';
 import { renderEpisodeView } from './views/episode.js';
 import { renderSkillEditorView } from './views/skillEditor.js';
 import { renderBattleView } from './views/battle.js';
+import { renderRouteEditorView } from './views/routeEditor.js';
 import * as BATTLE from './engine/battleCore.js';
 
 const app = document.getElementById('app');
@@ -41,6 +42,8 @@ function render(view){
         return renderBattleView(app, state);
       case 'skillEditor':
         return renderSkillEditorView(app, state);
+      case 'routeEditor':
+        return renderRouteEditorView(app, state);
       default: return renderRoutesView(app, state);
     }
   }catch(err){

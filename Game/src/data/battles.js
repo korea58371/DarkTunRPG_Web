@@ -1,15 +1,56 @@
 export const BATTLES = {
-  'BT-100': { id:'BT-100', enemy:['E-101'], seed:12345, winNext:'EP-101' },
-  // 초반: 해골과 늑대 혼합 전투
-  'BT-200': { id:'BT-200', enemy:[
-    { unit:'E-301', row:1, col:0 }, // 전열 좌
-    'E-101',
-    { unit:'E-301', row:1, col:2 }, // 전열 우
-    'E-102',
-    'E-103'
-  ], seed:67890, winNext:'EP-300', loseNext:'EP-205' },
-  // 보스전: 거대 해골(임시 한 칸 데이터; 2칸 규칙은 별도 설계 필요)
-  'BT-400': { id:'BT-400', enemy:['E-201'], seed:98765, winNext:'EP-900' }
+  "BT-100": {
+    "id": "BT-100",
+    "enemy": [
+      {
+        "unit": "E-101",
+        "row": 2,
+        "col": 0
+      }
+    ],
+    "seed": 12345,
+    "winNext": "EP-101",
+    "loseNext": ""
+  },
+  "BT-200": {
+    "id": "BT-200",
+    "enemy": [
+      {
+        "unit": "E-301",
+        "row": 1,
+        "col": 0
+      },
+      {
+        "unit": "E-101",
+        "row": 2,
+        "col": 0
+      },
+      {
+        "unit": "E-102",
+        "row": 2,
+        "col": 1
+      },
+      {
+        "unit": "E-103",
+        "row": 2,
+        "col": 2
+      },
+      {
+        "unit": "E-301",
+        "row": 3,
+        "col": 0
+      }
+    ],
+    "seed": 67890,
+    "winNext": "EP-300",
+    "loseNext": "EP-205"
+  },
+  "BT-400": {
+    "id": "BT-400",
+    "enemy": [
+      "E-201"
+    ],
+    "seed": 98765,
+    "winNext": "EP-900"
+  }
 };
-
-

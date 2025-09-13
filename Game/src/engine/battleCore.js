@@ -10,8 +10,16 @@ export function createBattleState(state, battle){
     const legacyPos = posOverride ?? base.position ?? base.row ?? 2;
     // map legacy 1..9 to row 1..3 (front=1, mid=2, rear=3). If already 1..3, keep.
     const rowFromLegacy = legacyPos <= 3 ? legacyPos : Math.min(3, Math.max(1, Math.ceil(legacyPos/3)));
-    let row = tag==='A' ? (Math.floor(idx/3)+1) : rowFromLegacy;
-    let col = tag==='A' ? (idx%3) : (Number.isInteger(base?.position) ? ((base.position-1)%3) : undefined);
+    let row, col;
+    if(tag==='A'){
+      // Allies: prefer explicit base.row or legacy position/override; fallback to party index grid
+      const preferred = Number.isInteger(base?.row) ? base.row : rowFromLegacy;
+      row = Math.min(3, Math.max(1, preferred || (Math.floor(idx/3)+1)));
+      col = (idx%3);
+    } else {
+      row = rowFromLegacy;
+      col = (Number.isInteger(base?.position) ? ((base.position-1)%3) : undefined);
+    }
     // Battle-specific placement override for enemies
     if(tag==='E' && placement){
       if(Number.isInteger(placement.position)){
@@ -161,20 +169,15 @@ export function pickTarget(state, battleState, isAlly, sk){
     if(remembered && selfSide.includes(remembered) && isAlive(remembered)) return remembered;
     return selfSide.find(id=>id && (battleState.units[id]?.hp>0)) || null;
   }
-  // melee: alive units in the foremost occupied row
+  // melee: only enemies in the globally leftmost column (min col) are valid; among them, pick deterministically
   if(sk?.range==='melee'){
-    const rows=[1,2,3];
-    for(const r of rows){
-      const candidates = pool.filter(id=>id && (battleState.units[id]?.row===r) && (battleState.units[id]?.hp>0));
-      if(candidates.length){
-        // prefer user-set target if it belongs to this row
-        if(battleState.target && candidates.includes(battleState.target)) return battleState.target;
-        // fallback to remembered target if it belongs to this row
-        if(remembered && candidates.includes(remembered)) return remembered;
-        return candidates[0];
-      }
-    }
-    return null;
+    const alive = pool.filter(id=> id && (battleState.units[id]?.hp>0));
+    if(!alive.length) return null;
+    const minCol = Math.min(...alive.map(id=> battleState.units[id]?.col ?? 999));
+    const frontCol = alive.filter(id=> (battleState.units[id]?.col===minCol));
+    // tie-breaker: smallest row first
+    frontCol.sort((a,b)=> (battleState.units[a]?.row||9) - (battleState.units[b]?.row||9));
+    return frontCol[0] || null;
   }
   // ranged: any alive enemy
   if(sk?.range==='ranged'){
@@ -357,6 +360,24 @@ export function performSkill(state, battleState, actor, sk){
     const died = target.hp<=0;
     return { missed:false, died };
   };
+  function applyOnHitStatuses(attackerId, attackerUnit, targetId, targetUnit, sk){
+    try{
+      // bleed: atk 기반 고정 피해, 시전자 계수
+      if(sk.bleed && targetUnit && (battleState.rng.next() < Math.max(0, Math.min(1, sk.bleed.chance||0)))){
+        const dur = Math.max(1, sk.bleed.duration||3);
+        const perTurn = Math.max(1, Math.round((attackerUnit.atk||0) * (sk.bleed.coeff||0.3)));
+        targetUnit._bleed = { remain: dur, amount: perTurn };
+        battleState.log.push({ type:'bleed', from: attackerId, to: targetId, duration: dur, amount: perTurn });
+      }
+      // burn: mag 기반 고정 피해, 시전자 계수
+      if(sk.burn && targetUnit && (battleState.rng.next() < Math.max(0, Math.min(1, sk.burn.chance||0)))){
+        const dur = Math.max(1, sk.burn.duration||3);
+        const perTurn = Math.max(1, Math.round((attackerUnit.mag||0) * (sk.burn.coeff||0.4)));
+        targetUnit._burn = { remain: dur, amount: perTurn };
+        battleState.log.push({ type:'burn', from: attackerId, to: targetId, duration: dur, amount: perTurn });
+      }
+    }catch{}
+  }
   const actorId = typeof actor === 'string' ? actor : actor.id;
   const actorUnit = typeof actor === 'string' ? battleState.units[actor] : actor;
   // 스킬 사본에 강화 적용
@@ -413,7 +434,8 @@ export function performSkill(state, battleState, actor, sk){
         const res = tryHitOnce(actorId, actorUnit, tid, tUnit, sk);
         if(!res.missed && sk.move && sk.move.who==='target' && !moved){
           const moverId = (sk.move.who==='actor') ? actorId : tid;
-          moved = doMove(moverId, sk.move);
+          // 이동이 불가능해도 스킬은 성공 처리(연출만 스킵)
+          moved = doMove(moverId, sk.move) || false;
         }
         if(res.died){ died=true; break; }
       }
@@ -443,6 +465,7 @@ export function performSkill(state, battleState, actor, sk){
           const moverId = (sk.move.who==='actor') ? actorId : tid;
           moved = doMove(moverId, sk.move);
         }
+        if(!res.missed){ applyOnHitStatuses(actorId, actorUnit, tid, tUnit, sk); }
         if(res.died){ died=true; break; }
       }
       if(died){
@@ -524,6 +547,34 @@ export function performSkill(state, battleState, actor, sk){
     const dirs = Array.isArray(sk.move?.allowedDirs) && sk.move.allowedDirs.length ? sk.move.allowedDirs : [sk.move?.dir||'forward'];
     let moved=false; for(const d of dirs){ if(doMove(moverId, { ...(sk.move||{}), dir:d })){ moved=true; break; } }
     if(!moved && (sk.move?.required)) return;
+  } else if(sk.type==='cross'){
+    maybeMoveActorBefore();
+    if(!targetId) return;
+    const tBase = battleState.units[targetId]; if(!tBase) return;
+    const row = tBase.row; const col = tBase.col;
+    // cross: 같은 행 + 같은 열 대상 (중복 제거)
+    const rowTargets = pool.filter(id=> id && (battleState.units[id]?.row===row) && (battleState.units[id]?.hp>0));
+    const colTargets = pool.filter(id=> id && (battleState.units[id]?.col===col) && (battleState.units[id]?.hp>0));
+    const targets = Array.from(new Set([...rowTargets, ...colTargets]));
+    targets.forEach(tid=>{
+      const tUnit = battleState.units[tid]; if(!tUnit) return;
+      let died=false; let moved=false;
+      for(let h=0; h<(sk.hits||1); h++){
+        const res = tryHitOnce(actorId, actorUnit, tid, tUnit, sk);
+        if(!res.missed && sk.move && sk.move.who==='target' && !moved){
+          const moverId = (sk.move.who==='actor') ? actorId : tid;
+          moved = doMove(moverId, sk.move);
+        }
+        if(!res.missed){ applyOnHitStatuses(actorId, actorUnit, tid, tUnit, sk); }
+        if(res.died){ died=true; break; }
+      }
+      if(died){
+        const idx = pool.indexOf(tid); if(idx>-1) pool[idx]=null;
+        const qi = battleState.queue.indexOf(tid); if(qi>-1) battleState.queue.splice(qi,1);
+        battleState.log.push({ type:'dead', to: tid });
+        if(battleState.allyOrder.includes(tid)) battleState.deadAllies.push(tid.split('@')[0]);
+      }
+    });
   } else {
     maybeMoveActorBefore();
     const target = battleState.units[targetId];
@@ -532,7 +583,7 @@ export function performSkill(state, battleState, actor, sk){
       const res = tryHitOnce(actorId, actorUnit, targetId, target, sk);
       if(!res.missed) anyHit = true;
       // 첫 적중 시점에 즉시 이동(대상 이동형)
-      if(!res.missed && sk.move && sk.move.who==='target' && !moved){ doMove(targetId, sk.move); moved = true; }
+      if(!res.missed && sk.move && sk.move.who==='target' && !moved){ moved = doMove(targetId, sk.move) || false; }
       if(res.died){
         died = true; break;
       }
@@ -549,13 +600,8 @@ export function performSkill(state, battleState, actor, sk){
       }catch{}
     }
     // 루프 내에서 이동 처리했으므로 추가 이동 없음
-    // 출혈 부여(스킬 메타에 존재할 경우): "적중 시" 확률로 적용
-    if(anyHit && !died && sk.bleed && target && (battleState.rng.next() < Math.max(0, Math.min(1, sk.bleed.chance||0)))){
-      const dur = Math.max(1, sk.bleed.duration||3);
-      const perTurn = Math.max(1, Math.round((actorUnit.atk||0) * (sk.bleed.coeff||0.3)));
-      target._bleed = { remain: dur, amount: perTurn };
-      battleState.log.push({ type:'bleed', from: actorId, to: targetId, duration: dur, amount: perTurn });
-    }
+    // on-hit 상태이상 적용(출혈/화상)
+    if(anyHit && !died && target){ applyOnHitStatuses(actorId, actorUnit, targetId, target, sk); }
   }
   // last action tracking removed per spec
   battleState.target = null;
@@ -669,6 +715,22 @@ export function applyTurnStartEffects(battleState){
         const aAlive = battleState.allyOrder.filter(id=>id && (battleState.units[id]?.hp>0)).length;
         console.debug?.('[core-death-dot-bleed]', { battleId: battleState.id, to: u.id, eAlive, aAlive });
       }catch{}
+      return;
+    }
+  }
+  // Burn: 시전자 mag 기반 고정 피해 틱(적용 시 고정값 저장)
+  if(u && u._burn && u._burn.remain>0 && u.hp>0){
+    const dot = Math.max(1, Math.round(u._burn.amount||0));
+    u.hp = Math.max(0, (u.hp||0) - dot);
+    battleState.log.push({ type:'burnTick', from: u.id, to: u.id, amount: dot, hp: u.hp });
+    u._burn.remain -= 1; if(u._burn.remain<=0) delete u._burn;
+    if(u.hp<=0){
+      const pool = (battleState.allyOrder.includes(u.id)) ? battleState.allyOrder : battleState.enemyOrder;
+      const idx = pool.indexOf(u.id); if(idx>-1) pool[idx] = null;
+      const qi = battleState.queue.indexOf(u.id); if(qi>-1) battleState.queue.splice(qi,1);
+      battleState.log.push({ type:'dead', to: u.id });
+      if(battleState.allyOrder.includes(u.id)) battleState.deadAllies.push(u.id.split('@')[0]);
+      battleState.turnUnit = battleState.queue[0] || null;
       return;
     }
   }

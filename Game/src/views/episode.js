@@ -50,6 +50,7 @@ export function renderEpisodeView(root, state){
         backdrop.addEventListener('click', ()=>{
           console.debug('[ending-click]', { ending: 'END01' });
           try{ backdrop.remove(); }catch{}
+          try{ import('../engine/rules.js').then(mod=> mod.setFlag?.(state,'game.ending','END01')); }catch{}
           // 성장 정보 초기화: 스킬 강화 진행도 초기화
           state.skillProgress = {}; console.debug('[ending-reset-skillProgress]');
           // 루트 방문 정보는 유지(visitedRoutes 보존)

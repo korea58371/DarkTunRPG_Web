@@ -88,15 +88,11 @@ export function renderBattleView(root, state){
       });
       return line;
     }
-    const front = toLine(1);
-    const mid   = toLine(2);
-    const rear  = toLine(3);
-
-    for(let i=0; i<3; i++){
+    const orderRows = [1,2,3];
+    orderRows.forEach(rowNum=>{
       const wrap = document.createElement('div'); wrap.className='row-wrap';
-      // ally: [rear, mid, front] (왼→오), enemy: [front, mid, rear]
-      const trio = side==='ally' ? [rear[i], mid[i], front[i]] : [front[i], mid[i], rear[i]];
-      trio.forEach(id=>{
+      const line = toLine(rowNum); // [col0, col1, col2]
+      line.forEach(id=>{
         const slot = document.createElement('div'); slot.className='slot';
         if(id){
           const u = B.units[id];
@@ -109,6 +105,7 @@ export function renderBattleView(root, state){
             if(u._regen && u._regen.remain>0){ buf.push(`<div class=\"slot-buff regen\" title=\"지속 회복\"><span>✚</span><span class=\"turns\">${u._regen.remain}</span></div>`); }
             if(u._poison && u._poison.remain>0){ buf.push(`<div class=\"slot-buff poison\" title=\"중독\"><span>☠</span><span class=\"turns\">${u._poison.remain}</span></div>`); }
             if(u._bleed && u._bleed.remain>0){ buf.push(`<div class=\"slot-buff bleed\" title=\"출혈\"><span>🩸</span><span class=\"turns\">${u._bleed.remain}</span></div>`); }
+            if(u._burn && u._burn.remain>0){ buf.push(`<div class=\"slot-buff burn\" title=\"화상\"><span>🔥</span><span class=\"turns\">${u._burn.remain}</span></div>`); }
             return buf.join('');
           })();
           el.innerHTML = `<div class=\"inner\"><div class=\"portrait\"></div><div class=\"hpbar\"><span style=\"width:${Math.max(0,(u.hp/u.hpMax)*100)}%\"></span><i class=\"pred\" style=\"width:0%\"></i></div><div class=\"shieldbar\" style=\"display:${(u.shield||0)>0?'block':'none'};\"><span style=\"width:${Math.max(0, Math.min(100, ((u.shield||0)/(u.hpMax||1))*100))}%\"></span></div></div><div class=\"slot-buffs\">${buffsHtml}</div><div class=\"name-label\">${u.name}</div>`;
@@ -136,7 +133,7 @@ export function renderBattleView(root, state){
         wrap.appendChild(slot);
       });
       rows.appendChild(wrap);
-    }
+    });
     laneEl.appendChild(rows);
   };
 
@@ -259,7 +256,8 @@ export function renderBattleView(root, state){
     const cards = cardsEl.querySelectorAll('.action-card');
     cards.forEach(card=>{
       const id = card.dataset.skillId; if(!id) return;
-      const sk = state.data.skills[id];
+      const baseSk = state.data.skills[id];
+      const sk = getEffectiveSkill(baseSk);
       const valid = isTargetValid(sk, selectedTarget || B.target);
       const mpOk = (actor.mp||0) >= (sk.cost?.mp||0);
       card.classList.toggle('disabled', !valid);
@@ -278,14 +276,13 @@ export function renderBattleView(root, state){
       return !!targetId && B.enemyOrder.includes(targetId) && (B.units[targetId]?.hp>0);
     }
     if(sk.range==='melee'){
-      // target must be in the foremost alive row
-      const rows=[1,2,3];
-      let foremost=null;
-      for(const r of rows){
-        if(B.enemyOrder.some(id=>id && (B.units[id]?.row===r) && (B.units[id]?.hp>0))){ foremost=r; break; }
-      }
-      if(!foremost) return false;
-      return !!targetId && B.enemyOrder.includes(targetId) && (B.units[targetId]?.row===foremost) && (B.units[targetId]?.hp>0);
+      // 근접: 모든 적 중 col이 가장 낮은 열만 타격 가능. 그 열이라면 누구나 타겟 가능
+      if(!targetId || !B.enemyOrder.includes(targetId) || !(B.units[targetId]?.hp>0)) return false;
+      const alive = B.enemyOrder.filter(id=> id && (B.units[id]?.hp>0));
+      if(!alive.length) return false;
+      const minCol = Math.min(...alive.map(id=> B.units[id]?.col ?? 999));
+      const tCol = B.units[targetId]?.col;
+      return tCol===minCol;
     }
     // fallback to previous rank-based
     if(!targetId) return false;
@@ -306,11 +303,9 @@ export function renderBattleView(root, state){
     }
     // 대상 이동이 필수인 스킬: 단일 타겟일 때 미리 이동 가능성 확인
     if(sk.move && sk.move.who==='target' && (sk.move.required!==false)){
-      // row/line은 사전 검증 스킵(실행 중 개별 대상 처리), 단일 대상만 체크
+      // 대상 강제이동은 사전 이동 가능성 검사를 하지 않는다(막혀도 스킬 사용 가능)
       if(sk.type!=='row' && sk.type!=='line'){
         if(!targetId) return false;
-        const pv = window.BATTLE.previewMove(state, B, targetId, sk.move);
-        if(pv.steps<=0) return false;
       }
     }
     // 순수 이동/자기강화(검막) 스킬은 타겟 불필요
@@ -346,6 +341,9 @@ export function renderBattleView(root, state){
     } else if(es.type==='line' && selectedTarget){
       const col = B.units[selectedTarget]?.col;
       B.enemyOrder.forEach(id=>{ if(!id) return; const u=B.units[id]; if(!u) return; if(u.col===col){ const el = enemyLane.querySelector(`.unit-slot[data-unit-id="${id}"]`); if(el) el.classList.add('is-aoe'); } });
+    } else if(es.type==='cross' && selectedTarget){
+      const r = B.units[selectedTarget]?.row; const c = B.units[selectedTarget]?.col;
+      B.enemyOrder.forEach(id=>{ if(!id) return; const u=B.units[id]; if(!u) return; if(u.row===r || u.col===c){ const el = enemyLane.querySelector(`.unit-slot[data-unit-id="${id}"]`); if(el) el.classList.add('is-aoe'); } });
     } else if(es.type==='strike' || es.type==='multi' || es.type==='poison'){
       if(!selectedTarget) return; const el = enemyLane.querySelector(`.unit-slot[data-unit-id="${selectedTarget}"]`); if(el) el.classList.add('is-aoe');
     }
@@ -357,23 +355,24 @@ export function renderBattleView(root, state){
     document.querySelectorAll('.unit-slot .hit-badge').forEach(n=>n.remove());
     document.querySelectorAll('.unit-slot .hpbar .pred').forEach(p=>{ p.style.width='0%'; p.style.left='0%'; });
     if(!selectedSkill) return;
+    const es = getEffectiveSkill(selectedSkill);
     const actor = B.units[B.turnUnit]; if(!actor) return;
     if(!canExecute(selectedSkill, selectedTarget || B.target)) return;
 
     // 대상 집합 구하기: 단일/라인/로우
     let targetIds = [];
     const fallbackTid = selectedTarget || B.target;
-    if(selectedSkill.range==='ally'){
+    if(es.range==='ally'){
       // only ally target; show hint on selected ally target only
       if(fallbackTid && B.allyOrder.includes(fallbackTid)) targetIds = [fallbackTid];
       else return;
     }
-    if(selectedSkill.type==='row'){
+    if(es.type==='row'){
       let targetRow = null;
-      if(Array.isArray(selectedSkill.to) && selectedSkill.to.length===1){ targetRow = selectedSkill.to[0]; }
+      if(Array.isArray(es.to) && es.to.length===1){ targetRow = es.to[0]; }
       else if(fallbackTid){ targetRow = B.units[fallbackTid]?.row || null; }
       if(targetRow){ targetIds = B.enemyOrder.filter(id=>id && (B.units[id]?.hp>0) && (B.units[id]?.row===targetRow)); }
-    } else if(selectedSkill.type==='line'){
+    } else if(es.type==='line'){
       if(!fallbackTid) return; const col = B.units[fallbackTid]?.col;
       targetIds = B.enemyOrder.filter(id=>id && (B.units[id]?.hp>0) && (B.units[id]?.col===col));
     } else {
@@ -382,10 +381,10 @@ export function renderBattleView(root, state){
     if(!targetIds.length) return;
 
     // 각 대상에 대해 배지/예상 피해 세그먼트 표시
-    const rawAcc = Math.max(0, Math.min(1, (selectedSkill.acc||1)));
-    const addAcc = Math.max(0, selectedSkill.accAdd||0);
-    const hits = Math.max(1, selectedSkill.hits||1);
-    const lane = (selectedSkill.range==='ally') ? allyLane : enemyLane; // 대상 레인
+    const rawAcc = Math.max(0, Math.min(1, (es.acc||1)));
+    const addAcc = Math.max(0, es.accAdd||0);
+    const hits = Math.max(1, es.hits||1);
+    const lane = (es.range==='ally') ? allyLane : enemyLane; // 대상 레인
     targetIds.forEach(tid=>{
       const target = B.units[tid]; if(!target) return;
       let addDodge = 0;
@@ -399,7 +398,7 @@ export function renderBattleView(root, state){
         collect(Array.isArray(target.passives)?target.passives:[], 'incoming');
         const matching = effects.filter(x=>{
           if(x.e.applyTo && x.e.applyTo!=='incoming') return false;
-          const w=x.e.when||{}; if(w.damageType && selectedSkill.damageType!==w.damageType) return false; return x.e.hook==='modifyDodge';
+          const w=x.e.when||{}; if(w.damageType && es.damageType!==w.damageType) return false; return x.e.hook==='modifyDodge';
         }).sort((a,b)=> (a.e.priority||999)-(b.e.priority||999));
         const groupBest={};
         matching.forEach(x=>{ const g=x.p.group||x.e.group||x.p.id; const val=x.e?.add?.dodge||0; if(!(g in groupBest) || (x.e.priority||0)<(groupBest[g].prio||0)){ groupBest[g]={val, prio:(x.e.priority||0)}; } });
@@ -408,7 +407,7 @@ export function renderBattleView(root, state){
       const dodgeBase = Math.max(0, Math.min(1, (target.dodge||0)));
       const dodgeFinal = Math.max(0, Math.min(1, dodgeBase + addDodge));
       const accFinal = (addAcc>0) ? Math.max(0, Math.min(1, rawAcc + addAcc - dodgeFinal)) : (rawAcc * (1 - dodgeFinal));
-      const finalHit = selectedSkill.type==='heal' ? 100 : Math.round(accFinal * 100);
+      const finalHit = es.type==='heal' ? 100 : Math.round(accFinal * 100);
       // 피해 가감 패시브가 있는 경우 예상 피해에도 반영
       let expectedDamageMul = 1;
       try{
@@ -418,14 +417,14 @@ export function renderBattleView(root, state){
         const collect=(ids, applyTo)=>{ (ids||[]).forEach(pid=>{ const p=passives[pid]; if(!p) return; (p.effects||[]).forEach(e=> effects.push({p,e,applyTo})); }); };
         collect(Array.isArray(source.passives)?source.passives:[], 'outgoing');
         collect(Array.isArray(target.passives)?target.passives:[], 'incoming');
-        const dmgList = effects.filter(x=> x.e.hook==='modifyDamage' && (!x.e.applyTo || x.e.applyTo==='outgoing' || x.e.applyTo==='incoming')).filter(x=>{ const w=x.e.when||{}; if(w.damageType && selectedSkill.damageType!==w.damageType) return false; return true; }).sort((a,b)=> (a.e.priority||999)-(b.e.priority||999));
+        const dmgList = effects.filter(x=> x.e.hook==='modifyDamage' && (!x.e.applyTo || x.e.applyTo==='outgoing' || x.e.applyTo==='incoming')).filter(x=>{ const w=x.e.when||{}; if(w.damageType && es.damageType!==w.damageType) return false; return true; }).sort((a,b)=> (a.e.priority||999)-(b.e.priority||999));
         const groupBest={};
         dmgList.forEach(x=>{ const g=x.p.group||x.e.group||x.p.id; const mul=(x.e?.mul?.damage)||1; if(!(g in groupBest) || (x.e.priority||0)<(groupBest[g].prio||0)){ groupBest[g]={mul, prio:(x.e.priority||0)}; } });
         Object.values(groupBest).forEach(v=>{ expectedDamageMul *= (v.mul||1); });
       }catch(e){ /* noop */ }
-      let base = (selectedSkill.type==='heal')
-        ? Math.max(1, Math.round((actor.mag||0) * (selectedSkill.coeff||1)))
-        : Math.max(1, Math.round(((actor.atk||1) * (selectedSkill.coeff||1)) - (target.def||0)));
+      let base = (es.type==='heal')
+        ? Math.max(1, Math.round((actor.mag||0) * (es.coeff||1)))
+        : Math.max(1, Math.round(((actor.atk||1) * (es.coeff||1)) - (target.def||0)));
       const critP = Math.max(0, Math.min(1, actor.crit||0));
       const blockP = Math.max(0, Math.min(1, target.block||0));
       const expectedPerHit = Math.max(1, Math.round(base * (1 + critP*0.5) * (1 - blockP*0.8) * expectedDamageMul));
@@ -447,7 +446,7 @@ export function renderBattleView(root, state){
       slotEl.appendChild(badge);
       const pred = slotEl.querySelector('.hpbar .pred');
       if(pred){
-        if(selectedSkill.type==='heal'){
+        if(es.type==='heal'){
           // heal: 증가 구간을 흰색으로
           pred.style.left = `${hpNowPct}%`;
           pred.style.width = `${Math.max(0, hpAfterPct - hpNowPct)}%`;
@@ -465,15 +464,16 @@ export function renderBattleView(root, state){
     const list = actor.skills?.length? actor.skills : ['SK-01'];
     // 정렬: 사용 가능 먼저, MP 부족/타겟 불가 뒤로
     const enriched = list.map((skId, idx)=>{
-      const sk = state.data.skills[skId]; if(!sk) return null; const usable = canExecute(sk, selectedTarget || B.target); const mpOk = (actor.mp||0) >= (sk.cost?.mp||0); return { sk, usable, mpOk, idx };
+      const baseSk = state.data.skills[skId]; if(!baseSk) return null; const es = getEffectiveSkill(baseSk); const usable = canExecute(es, selectedTarget || B.target); const mpOk = (actor.mp||0) >= (es.cost?.mp||0); return { sk: baseSk, es, usable, mpOk, idx };
     }).filter(Boolean).sort((a,b)=> a.idx - b.idx); // 항상 원래 스킬 순서 유지
-    enriched.forEach(({sk, mpOk})=>{
+    enriched.forEach(({sk, es, mpOk})=>{
       const card = document.createElement('div'); card.className='action-card'+(selectedSkill?.id===sk.id?' selected':'');
       if(!mpOk) card.classList.add('mp-insufficient');
       card.dataset.skillId = sk.id;
-      const targetText = sk.type==='row' ? (Array.isArray(sk.to)&&sk.to.length===1? `전열 전체` : `선택 라인 전체`) : (sk.range==='melee'? '근접: 가장 앞열만' : sk.range==='ranged'? '원거리: 전체 선택 가능' : (sk.to? (sk.to.includes(1)? '전열' : '후열') : '대상: 전/후열'));
-      const accBasePct = Math.round(((sk.acc||1) * 100));
-      const accAddPct = Math.round((Math.max(0, sk.accAdd||0) * 100));
+      const targetText = (es.type||sk.type)==='row' ? (Array.isArray(es.to)&&es.to.length===1? `전열 전체` : `선택 라인 전체`) : ((es.range||sk.range)==='melee'? '근접: 최전열(가장 낮은 col)만' : ((es.range||sk.range)==='ranged'? '원거리: 전체 선택 가능' : ((es.to||sk.to)? ((es.to||sk.to).includes(1)? '전열' : '후열') : '대상: 전/후열')));
+      // es 준비: 이미 계산됨
+      const accBasePct = Math.round((((es.acc!=null? es.acc : sk.acc)||1) * 100));
+      const accAddPct = Math.round((Math.max(0, ((es.accAdd!=null? es.accAdd : sk.accAdd)||0)) * 100));
       // 스킬 진행도: 유닛별 진행도에서 조회
       const baseId = (B.turnUnit||'').split('@')[0];
       const sp = (state.skillProgress?.[baseId]?.[sk.id]) || { level:1, xp:0, nextXp: (state.data.skills?.SKILL_CFG?.baseNext||20) };
@@ -507,30 +507,30 @@ export function renderBattleView(root, state){
         if(sk.range==='ally' || sk.type==='heal') return '단일';
         return '단일';
       })();
-      const rangeText = sk.range==='melee'? '근접' : sk.range==='ranged'? '원거리' : '아군';
-      const dmgTypeText = (sk.type==='move' || sk.type==='shield') ? '' : (sk.damageType==='slash'? '참격' : sk.damageType==='pierce'? '관통' : sk.damageType==='magic'? '마법' : sk.damageType==='blunt'? '타격' : (sk.type==='heal'?'지원':''));
+      const rangeText = (es.range||sk.range)==='melee'? '근접' : (es.range||sk.range)==='ranged'? '원거리' : '아군';
+      const dmgTypeText = ((es.type||sk.type)==='move' || (es.type||sk.type)==='shield') ? '' : ((es.damageType||sk.damageType)==='slash'? '참격' : (es.damageType||sk.damageType)==='pierce'? '관통' : (es.damageType||sk.damageType)==='magic'? '마법' : (es.damageType||sk.damageType)==='blunt'? '타격' : ((es.type||sk.type)==='heal'?'지원':''));
 
       // 3행: 명중률(보정 0%면 숨김)
       const accLine = `명중: ${accBasePct}%` + (accAddPct>0? ` (+${accAddPct}%)` : '');
 
       // 4행: 대미지(타수 2회 이상만 표기)
-      let coeffEff = (sk.coeff||1);
+      let coeffEff = ((es.coeff!=null? es.coeff : sk.coeff)||1);
       const dmgStack = countById['SK01_DMG30']||0;
       if(dmgStack>0){ coeffEff = Math.round((coeffEff * Math.pow(1.3, dmgStack))*100)/100; }
-      const hits = Math.max(1, sk.hits||1);
+      const hits = Math.max(1, ((es.hits!=null? es.hits : sk.hits)||1));
       const dmgPercent = `${Math.round(coeffEff*100)}%` + (hits>=2? ` x ${hits}` : '');
-      const dmgLine = (sk.type==='heal') ? `치유: ${Math.round((sk.coeff||1)*100)}%` : (sk.type==='move' || sk.type==='shield' ? `` : `대미지: ${dmgPercent}`);
+      const dmgLine = ((es.type||sk.type)==='heal') ? `치유: ${Math.round((((es.coeff!=null? es.coeff : sk.coeff)||1)*100))}%` : (((es.type||sk.type)==='move' || (es.type||sk.type)==='shield') ? `` : `대미지: ${dmgPercent}`);
 
       // 5행: 추가 옵션(버프/디버프 등)
       const extraLine = (()=>{
         const parts = [];
-        if(sk.bleed){ parts.push(`출혈 ${Math.round((sk.bleed.chance||0.5)*100)}% · ${sk.bleed.duration||3}턴`); }
-        if(sk.type==='poison' || sk.id==='SK-22'){ parts.push(`중독 ${((state.data.skills['SK-22']?.duration)||3)}턴`); }
+        if(es.bleed){ parts.push(`출혈 ${Math.round((es.bleed.chance||0.5)*100)}% · ${es.bleed.duration||3}턴`); }
+        if((es.type||sk.type)==='poison' || sk.id==='SK-22'){ parts.push(`중독 ${((state.data.skills['SK-22']?.duration)||3)}턴`); }
         return parts.join(' · ');
       })();
 
       // 카드 마크업: 상단(이름+레벨/경험치, 우측 MP), 속성, 명중, 대미지, 추가옵션
-      const titleLine = `<div class="title"><strong>${sk.name||sk.id}</strong> <span class="lv">${lvLine}</span></div>`;
+      const titleLine = `<div class="title"><strong>${es.name||sk.name||sk.id}</strong> <span class="lv">${lvLine}</span></div>`;
       const attrPills = [areaText, rangeText].concat(dmgTypeText? [(dmgTypeText==='지원'? '지원' : (dmgTypeText+'대미지'))] : []);
       const attrLine = `<div class="attr">${attrPills.map(t=>`<span class=\"pill\">${t}</span>`).join('')}</div>`;
       const hitLine = `<div class="hit">${accLine}</div>`;
@@ -542,14 +542,14 @@ export function renderBattleView(root, state){
         const already = selectedSkill?.id === sk.id;
         // 스킬 전환 시 기존 이동 오버레이 정리
         if(cleanupMoveOverlay){ try{ cleanupMoveOverlay(); }catch{} cleanupMoveOverlay=null; }
-        selectedSkill = sk;
+        selectedSkill = es;
         document.querySelectorAll('.action-card.selected').forEach(x=>x.classList.remove('selected'));
         card.classList.add('selected');
         refreshCardStates();
         updateAOEHighlight();
         updateTargetHints();
         // 이동형(능동) 스킬: 이동 목적지 선택 UI 진입
-        if(sk.type==='move'){
+        if((es.type||sk.type)==='move'){
           enterMoveTargeting();
           return;
         }
@@ -651,12 +651,12 @@ export function renderBattleView(root, state){
     // 오버레이 표시
     function mark(tile){
       const lane = allyLane; // 배우는 아군이므로 아군 레인
-      // grid에서 해당 row/col에 있는 유닛 슬롯 요소를 찾아야 함: 현재 그리드는 row-wrap/slot 순으로 고정 3x3
-      const rowIndex = (tile.row===1?2 : tile.row===2?1 : 0); // 렌더 순서: rear(3), mid(2), front(1)
-      const colIndex = Math.max(0, Math.min(2, tile.col||0));
-      const rowWrap = lane.querySelectorAll('.row-wrap')[colIndex];
+      // grid에서 해당 row/col에 있는 유닛 슬롯 요소를 찾아야 함: 현재 그리드는 row-wrap(행)/slot(열) 순으로 고정 3x3
+      const rowIndex = Math.max(0, Math.min(2, (tile.row||1) - 1)); // 행: 1,2,3 → 0,1,2
+      const colIndex = Math.max(0, Math.min(2, tile.col||0));       // 열: 0,1,2 그대로
+      const rowWrap = lane.querySelectorAll('.row-wrap')[rowIndex];
       if(!rowWrap) return null;
-      const slot = rowWrap.querySelectorAll('.slot')[rowIndex];
+      const slot = rowWrap.querySelectorAll('.slot')[colIndex];
       if(!slot) return null;
       // 고스트 .unit-slot을 후보 표시용으로 활성화(슬롯 크기 대신 유닛 슬롯 크기로 딱 맞춤)
       let ghost = slot.querySelector('.unit-slot');
@@ -1051,8 +1051,13 @@ export function renderBattleView(root, state){
         if(state.party?.positions){ Object.keys(state.party.positions).forEach(id=>{ if(deadSet.has(id)) delete state.party.positions[id]; }); }
       }
       // 전투 결과 플래그 기록(분기용)
-      const key = `bt.${B.id||'BT-010'}.win`; // B.id가 없다면 기본값
-      state.flags[key] = isWin;
+      try{
+        const key = `bt.${B.id||'BT-010'}.win`;
+        import('../engine/rules.js').then(mod=>{
+          const setFlag = mod.setFlag || ((st,k,v)=>{ st.flags=st.flags||{}; st.flags[k]=v; });
+          setFlag(state, key, isWin);
+        }).catch(()=>{ state.flags[key] = isWin; });
+      }catch{ const key = `bt.${B.id||'BT-010'}.win`; state.flags[key] = isWin; }
       delete state.ui.battleState;
       const curBid = B.id || 'BT-010';
       // 전투 데이터 기반 분기: winNext/loseNext가 있으면 해당 타겟으로 이동

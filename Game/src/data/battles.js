@@ -6,6 +6,11 @@ export const BATTLES = {
         "unit": "E-101",
         "row": 2,
         "col": 0
+      },
+      {
+        "unit": "E-102",
+        "row": 2,
+        "col": 1
       }
     ],
     "seed": 0,

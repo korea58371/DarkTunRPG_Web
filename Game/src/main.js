@@ -30,6 +30,13 @@ function render(view){
           state.rng = window.newRunSeed();
           const seedSpan2 = document.getElementById('seed'); if(seedSpan2) seedSpan2.textContent = state.rng.seed;
         }
+        // 프롤로그 자동 진입: 루트UI 선택 없이 바로 EP-001 실행
+        try{
+          const startRoute = (state.data.routes||[])[0];
+          if(startRoute && (startRoute.next||'').startsWith('EP-')){
+            state.ui.currentEpisode = startRoute.next; return render('episode');
+          }
+        }catch{}
         render('routes');
       });
       case 'party': return renderPartyView(app, state);

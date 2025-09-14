@@ -78,13 +78,17 @@ export function renderBattleView(root, state){
     laneEl.appendChild(title);
     const rows = document.createElement('div'); rows.className='rows';
 
+    // UI index mapping: 레이아웃(CSS)에서 이미 아군 보드를 좌우 반전하고 있다면
+    // 여기서는 추가 반전 없이 로컬 col을 그대로 사용한다.
+    const uiIndexFromCol=(sideName, col)=> Math.max(0, Math.min(2, col||0));
+
     // 3x3 고정 그리드를 유지하기 위해 각 row별 3칸 배열을 만든다.
     function toLine(rowNum){
       const line = [null,null,null];
       ids.forEach(id=>{
         if(!id) return; const u=B.units[id]; if(!u) return;
-        if((u.row||2)!==rowNum) return; const col = Math.max(0, Math.min(2, u.col ?? 0));
-        line[col] = id;
+        if((u.row||2)!==rowNum) return; const idx = uiIndexFromCol(side, (u.col ?? 0));
+        line[idx] = id;
       });
       return line;
     }
@@ -653,7 +657,8 @@ export function renderBattleView(root, state){
       const lane = allyLane; // 배우는 아군이므로 아군 레인
       // grid에서 해당 row/col에 있는 유닛 슬롯 요소를 찾아야 함: 현재 그리드는 row-wrap(행)/slot(열) 순으로 고정 3x3
       const rowIndex = Math.max(0, Math.min(2, (tile.row||1) - 1)); // 행: 1,2,3 → 0,1,2
-      const colIndex = Math.max(0, Math.min(2, tile.col||0));       // 열: 0,1,2 그대로
+      // 열: 레이아웃이 반전 처리하므로 로컬 col을 그대로 사용
+      const colIndex = Math.max(0, Math.min(2, (tile.col||0)));
       const rowWrap = lane.querySelectorAll('.row-wrap')[rowIndex];
       if(!rowWrap) return null;
       const slot = rowWrap.querySelectorAll('.slot')[colIndex];
@@ -723,7 +728,7 @@ export function renderBattleView(root, state){
     let lastWasHit = false;
     let maxEnd = 0; // 전체 스케줄 종료 시각(ms)
 
-    console.debug('[anim] queue', events.length, 'items');
+    console.debug('[anim] queue', events.length, 'items', { animGen, turnUnit: B.turnUnit });
     events.forEach((ev, idx)=>{
       // 시작 시각 계산
       let startAt = 0;
@@ -742,6 +747,8 @@ export function renderBattleView(root, state){
       maxEnd = Math.max(maxEnd, scheduleAt + duration);
 
       setTimeout(()=>{
+        // stale callback guard: if a new animation generation started, cancel this tick
+        if(animGen !== B._animGen){ console.warn('[anim-skip-stale]', { idx, type:ev.type, animGen, current:B._animGen }); return; }
         console.debug?.('[anim]', idx, ev.type, { to: ev.to, from: ev.from, dmg: ev.dmg, crit: ev.crit, blocked: ev.blocked, isMulti: ev.isMulti, when: scheduleAt });
         if(ev.type==='move'){
           const unitId = ev.unit; const u = B.units[unitId]; if(!u) return;
@@ -758,7 +765,7 @@ export function renderBattleView(root, state){
               renderRows(enemyLane, B.enemyOrder, 'enemy');
               setTurnHighlight();
             }, 240);
-          }
+          } else { console.warn('[anim-move] slot not found', { unitId, lane: lane?.className }); }
         } else if(ev.type==='skillLevelUp'){
           // 전투 중 즉시 레벨업: 선택 모달 표시(간단 UI)
           const uId = ev.unit; const sId = ev.skillId; const u = B.units[uId];
@@ -907,6 +914,8 @@ export function renderBattleView(root, state){
       }, scheduleAt);
     });
     B.log.length = 0;
+    // end marker
+    setTimeout(()=>{ if(animGen===B._animGen) console.debug('[anim-done]', { animGen, maxEnd }); }, Math.max(1, maxEnd+1));
     return maxEnd;
   }
 

@@ -7,15 +7,30 @@ export function createBattleState(state, battle){
     if(!base) return null;
     const id = `${baseId}@${tag}${idx}`;
     const posOverride = state.party.positions?.[baseId];
-    const legacyPos = posOverride ?? base.position ?? base.row ?? 2;
+    const legacyPos = (typeof posOverride==='number') ? posOverride : (base.position ?? base.row ?? 2);
     // map legacy 1..9 to row 1..3 (front=1, mid=2, rear=3). If already 1..3, keep.
     const rowFromLegacy = legacyPos <= 3 ? legacyPos : Math.min(3, Math.max(1, Math.ceil(legacyPos/3)));
     let row, col;
     if(tag==='A'){
-      // Allies: prefer explicit base.row or legacy position/override; fallback to party index grid
-      const preferred = Number.isInteger(base?.row) ? base.row : rowFromLegacy;
-      row = Math.min(3, Math.max(1, preferred || (Math.floor(idx/3)+1)));
-      col = (idx%3);
+      // Allies: support explicit per-unit placement from state.party.positions
+      // 1) object form: {row, col}
+      if(posOverride && typeof posOverride==='object'){
+        const r = Number.isInteger(posOverride.row)? posOverride.row : rowFromLegacy;
+        const c = Number.isInteger(posOverride.col)? posOverride.col : 0;
+        row = Math.min(3, Math.max(1, r));
+        col = Math.min(2, Math.max(0, c));
+      } else {
+        // 2) numeric legacy form (1..9) → row/col 파생
+        const preferred = Number.isInteger(base?.row) ? base.row : rowFromLegacy;
+        row = Math.min(3, Math.max(1, preferred || (Math.floor(idx/3)+1)));
+        if(typeof legacyPos==='number'){
+          const visualCol = ((Math.max(1, Math.min(9, legacyPos)) - 1) % 3);
+          col = Math.min(2, Math.max(0, 2 - visualCol)); // 로컬: 전열=0, 중열=1, 후열=2
+        } else {
+          // 기본 인덱스 기반 배치도 로컬 전열=0을 유지(가운데=1, 후열=2)
+          col = Math.min(2, Math.max(0, (idx%3)));
+        }
+      }
     } else {
       row = rowFromLegacy;
       col = (Number.isInteger(base?.position) ? ((base.position-1)%3) : undefined);
@@ -47,10 +62,37 @@ export function createBattleState(state, battle){
     const baseId = entry.unit || entry.id;
     return inst(baseId,'E',i, entry);
   }).filter((v,i)=> i<9 && v); // cap 9
+  // Enforce unique (row,col) for allies as well
+  const occAlly = { 1:[null,null,null], 2:[null,null,null], 3:[null,null,null] };
+  allyOrder.forEach(id=>{
+    const u = units[id]; if(!u || (u.hp||0)<=0) return; // dead allies do not occupy slots
+    const tryPlace = (row, col)=>{ if(!occAlly[row][col]){ occAlly[row][col]=id; u.row=row; u.col=col; return true; } return false; };
+    let row = Math.min(3, Math.max(1, u.row||2));
+    let col = (typeof u.col==='number' && u.col>=0 && u.col<=2) ? u.col : 0;
+    if(!tryPlace(row, col)){
+      // try other columns in same row first
+      let placed=false;
+      for(let c=0;c<3;c++){ if(tryPlace(row, c)){ placed=true; break; } }
+      if(!placed){
+        for(let step=1; step<=2 && !placed; step++){
+          const nr = ((row-1+step)%3)+1;
+          for(let c=0;c<3;c++){ if(tryPlace(nr, c)){ placed=true; break; } }
+        }
+      }
+    }
+  });
+  // 영구 사망(회차 내) 처리: state.ownedUnits에 없는 아군은 제외
+  try{
+    const owned = state.ownedUnits || {};
+    for(let i=0;i<allyOrder.length;i++){
+      const id = allyOrder[i]; if(!id) continue; const base = id.split('@')[0];
+      if(owned[base] === false){ allyOrder[i]=null; delete units[id]; }
+    }
+  }catch{}
   // Enforce unique (row,col) per enemy; if collision, place to next available slot (row/col)
   const occ = { 1:[null,null,null], 2:[null,null,null], 3:[null,null,null] };
   enemyOrder.forEach(id=>{
-    const u = units[id]; if(!u) return;
+    const u = units[id]; if(!u || (u.hp||0)<=0) return; // dead enemies do not occupy slots
     const tryPlace = (row, col)=>{ if(!occ[row][col]){ occ[row][col]=id; u.row=row; u.col=col; return true; } return false; };
     let row = Math.min(3, Math.max(1, u.row||2));
     let col = (typeof u.col==='number' && u.col>=0 && u.col<=2) ? u.col : 0;
@@ -68,8 +110,9 @@ export function createBattleState(state, battle){
       // if still not placed (grid full), leave as-is (should not happen due to cap 9)
     }
   });
-  const all = [...allyOrder, ...enemyOrder];
-  const queue = all.sort((a,b)=> (units[b].spd||0) - (units[a].spd||0));
+  const queue = [...allyOrder, ...enemyOrder]
+    .filter(id=> id && units[id] && (units[id].hp||0)>0)
+    .sort((a,b)=> (units[b]?.spd||0) - (units[a]?.spd||0));
   // 조작 턴은 아군만: 적이 선두라면 아군 중 최속으로 시작 지점 보정
   if(queue.length && !allyOrder.includes(queue[0])){
     const fastestAlly = allyOrder.filter(Boolean).sort((a,b)=> (units[b].spd||0)-(units[a].spd||0))[0];
@@ -79,7 +122,8 @@ export function createBattleState(state, battle){
     }
   }
   const turnUnit = queue[0];
-  return { allyOrder, enemyOrder, queue, turnUnit, target:null, units, winner:null, rng: state.rng, log: [], id: battle?.id, battle, partySnapshot: (state.party.members||[]).slice(), positionsSnapshot: { ...(state.party.positions||{}) }, turn: 1, turnStartProcessedFor: null, lastTarget: {}, deadAllies: [] };
+  const rng = (state.rng && typeof state.rng.next==='function') ? state.rng : { next: Math.random, int:(n)=> Math.floor(Math.random()*n) };
+  return { allyOrder, enemyOrder, queue, turnUnit, target:null, units, winner:null, rng, log: [], id: battle?.id, battle, partySnapshot: (state.party.members||[]).slice(), positionsSnapshot: { ...(state.party.positions||{}) }, turn: 1, turnStartProcessedFor: null, lastTarget: {}, deadAllies: [] };
 }
 
 // Movement helpers
@@ -92,7 +136,7 @@ function isOccupied(battleState, unitId, row, col){
 function clampPos(row, col){ return { row: Math.max(1, Math.min(3, row)), col: Math.max(0, Math.min(2, col)) }; }
 
 function stepDelta(dir){
-  // forward/back: 전후(행), up/down: 좌우(열)
+  // 전후 = 열(col) 기준 이동, 상하 = 행(row) 기준 이동
   if(dir==='forward') return { dr: 0, dc:-1 };
   if(dir==='back')    return { dr: 0, dc: 1 };
   if(dir==='up')      return { dr:-1, dc: 0 };
@@ -130,10 +174,9 @@ export function canUseSkill(state, battleState, actorId, targetId, sk){
     const a = battleState.units[actorId]; if(!a) return false;
     if(!sk.allowedRows.includes(a.row||2)) return false;
   }
-  // movement requirement
-  if(sk.move && (sk.move.required!==false)){ // 기본: 필요함
-    const moverId = (sk.move.who==='actor') ? actorId : targetId;
-    const prev = previewMove(state, battleState, moverId, sk.move);
+  // 배우 선이동만 사전 제약. 대상 강제이동은 사용 가능(실패 시 연출만 스킵)
+  if(sk.move && sk.move.who==='actor' && (sk.move.required!==false)){
+    const prev = previewMove(state, battleState, actorId, sk.move);
     if(prev.steps<=0) return false;
   }
   return true;
@@ -173,17 +216,47 @@ export function pickTarget(state, battleState, isAlly, sk){
   if(sk?.range==='melee'){
     const alive = pool.filter(id=> id && (battleState.units[id]?.hp>0));
     if(!alive.length) return null;
-    const minCol = Math.min(...alive.map(id=> battleState.units[id]?.col ?? 999));
-    const frontCol = alive.filter(id=> (battleState.units[id]?.col===minCol));
+    let cols = alive.map(id=> battleState.units[id]?.col ?? 999);
+    if(!isAlly){ cols = cols.map(c=> 2 - c); } // 적 관점: 아군 col 반전
+    const minCol = Math.min(...cols);
+    try{ console.warn('[pickTarget:melee]', { actor: battleState.turnUnit, pool: alive.map(id=>({id, col:battleState.units[id]?.col, row:battleState.units[id]?.row})), minCol }); }catch{}
+    // 플레이어가 선택한 타겟이 최전열(minCol)에 있으면 그 타겟을 그대로 사용
+    if(battleState.target && pool.includes(battleState.target)){
+      const tCol = battleState.units[battleState.target]?.col;
+      const adjustedTCol = isAlly ? tCol : (2 - tCol);
+      if(adjustedTCol===minCol) return battleState.target;
+    }
+    const frontCol = alive.filter((id,i)=> (isAlly ? battleState.units[id]?.col : (2 - battleState.units[id]?.col)) === minCol);
     // tie-breaker: smallest row first
     frontCol.sort((a,b)=> (battleState.units[a]?.row||9) - (battleState.units[b]?.row||9));
-    return frontCol[0] || null;
+    const selected = frontCol[0] || null;
+    try{ console.warn('[pickTarget:selected]', { actor: battleState.turnUnit, selected }); }catch{}
+    return selected;
   }
   // ranged: any alive enemy
   if(sk?.range==='ranged'){
     if(battleState.target && pool.includes(battleState.target) && (battleState.units[battleState.target]?.hp>0)) return battleState.target;
     if(remembered && pool.includes(remembered) && isAlive(remembered)) return remembered;
     return pool.find(id=>id && (battleState.units[id]?.hp>0)) || null;
+  }
+  // heuristic: 기본 단일타격(strike)인데 range가 명시되지 않았다면 근접 규칙(min col)을 사용
+  if(!sk?.range && (sk?.type==='strike' || !sk?.type)){
+    const alive = pool.filter(id=> id && (battleState.units[id]?.hp>0));
+    if(!alive.length) return null;
+    let cols = alive.map(id=> battleState.units[id]?.col ?? 999);
+    if(!isAlly){ cols = cols.map(c=> 2 - c); }
+    const minCol = Math.min(...cols);
+    try{ console.warn('[pickTarget:implicit-melee]', { actor: battleState.turnUnit, pool: alive.map(id=>({id, col:battleState.units[id]?.col, row:battleState.units[id]?.row})), minCol }); }catch{}
+    if(battleState.target && pool.includes(battleState.target)){
+      const tCol = battleState.units[battleState.target]?.col;
+      const adjustedTCol = isAlly ? tCol : (2 - tCol);
+      if(adjustedTCol===minCol) return battleState.target;
+    }
+    const frontCol = alive.filter((id,i)=> (isAlly ? battleState.units[id]?.col : (2 - battleState.units[id]?.col)) === minCol);
+    frontCol.sort((a,b)=> (battleState.units[a]?.row||9) - (battleState.units[b]?.row||9));
+    const selected = frontCol[0] || null;
+    try{ console.warn('[pickTarget:selected-implicit]', { actor: battleState.turnUnit, selected }); }catch{}
+    return selected;
   }
   // fallback: previous behavior
   const rankAllowed = sk?.to || [1,2];
@@ -309,13 +382,13 @@ export function performSkill(state, battleState, actor, sk){
       }
     } else {
       // 기존 방식: acc 판정 후 dodge 별도 판정 → 최종 acc*(1-dodge)
-      if(battleState.rng.next() > acc){
-        battleState.log.push({ type:'miss', from: fromId, to: toId, skill: skill.id, isMulti: (skill.hits||1)>1, hp: target.hp, shield: target.shield||0 });
-        return { missed:true, died:false };
-      }
-      if(battleState.rng.next() < dodge){
-        battleState.log.push({ type:'miss', from: fromId, to: toId, skill: skill.id, isMulti: (skill.hits||1)>1 });
-        return { missed:true, died:false };
+    if(battleState.rng.next() > acc){
+      battleState.log.push({ type:'miss', from: fromId, to: toId, skill: skill.id, isMulti: (skill.hits||1)>1, hp: target.hp, shield: target.shield||0 });
+      return { missed:true, died:false };
+    }
+    if(battleState.rng.next() < dodge){
+      battleState.log.push({ type:'miss', from: fromId, to: toId, skill: skill.id, isMulti: (skill.hits||1)>1 });
+      return { missed:true, died:false };
       }
     }
     // block / crit
@@ -389,7 +462,10 @@ export function performSkill(state, battleState, actor, sk){
   if(mpCost>0){ actorUnit.mp = Math.max(0, (actorUnit.mp||0) - mpCost); }
   let targetId = pickTarget(state, battleState, isAlly, sk);
   const __logBefore = (battleState.log||[]).length;
-  if(!targetId && sk.type!=='shield' && sk.type!=='heal') return;
+  // 타겟 필요 여부 판정: 단일/라인/크로스/근접/원거리만 필요, row(고정행)·move·shield·heal은 불필요
+  const needsTarget = (sk.type==='line' || sk.type==='cross' || sk.type==='poison' || sk.range==='ranged' || sk.range==='melee');
+  const rowFixed = (sk.type==='row' && Array.isArray(sk.to) && sk.to.length===1);
+  if(!targetId && needsTarget && !rowFixed) return;
   // Movement executor: 적중 후 이동(또는 순수 이동 스킬)
   const doMove=(moverId, moveSpec)=>{
     if(!moverId || !moveSpec) return false;

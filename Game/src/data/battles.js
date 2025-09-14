@@ -1,15 +1,9 @@
 export const BATTLES = {
   "BT-100": {
     "id": "BT-100",
-    "enemy": [
-      {
-        "unit": "E-101",
-        "row": 2,
-        "col": 0
-      }
-    ],
-    "seed": 12345,
-    "winNext": "EP-101",
+    "enemy": [],
+    "seed": 0,
+    "winNext": "",
     "loseNext": ""
   },
   "BT-200": {

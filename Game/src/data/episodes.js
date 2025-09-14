@@ -89,11 +89,6 @@ export const EPISODES = {
         "label": "소리를 향해 이동한다.",
         "next": "R-100",
         "effects": []
-      },
-      {
-        "label": "우선 신중하게 상황을 살피자.",
-        "next": "R-101",
-        "effects": []
       }
     ]
   },

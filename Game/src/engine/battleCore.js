@@ -93,10 +93,10 @@ function clampPos(row, col){ return { row: Math.max(1, Math.min(3, row)), col: M
 
 function stepDelta(dir){
   // forward/back: 전후(행), up/down: 좌우(열)
-  if(dir==='forward') return { dr:-1, dc:0 };
-  if(dir==='back')    return { dr: 1, dc:0 };
-  if(dir==='up')      return { dr: 0, dc:-1 };
-  if(dir==='down')    return { dr: 0, dc: 1 };
+  if(dir==='forward') return { dr: 0, dc:-1 };
+  if(dir==='back')    return { dr: 0, dc: 1 };
+  if(dir==='up')      return { dr:-1, dc: 0 };
+  if(dir==='down')    return { dr: 1, dc: 0 };
   if(dir==='upLeft')  return { dr:-1, dc:-1 };
   if(dir==='upRight') return { dr:-1, dc: 1 };
   if(dir==='downLeft')return { dr: 1, dc:-1 };

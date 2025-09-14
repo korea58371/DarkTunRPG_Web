@@ -12,8 +12,8 @@ export const EP_DEFAULT_CFG = {
   },
   typing: { speed: 24, skippable: true },
   easing: 'ease',
-  // overall screen scale multiplier to keep VN smaller than viewport (similar to battle UI)
-  scale: 0.92
+  // overall screen scale multiplier; 1 = fit to viewport
+  scale: 1
 };
 
 // Normalize legacy EP {scene, choices} to DSL {events}
@@ -48,9 +48,10 @@ function evalWhen(when, state){
 function injectStylesOnce(){
   const id='ep-vn-styles'; if(document.getElementById(id)) return;
   const st=document.createElement('style'); st.id=id; st.textContent=`
-  .ep-vn { position:relative; width:100%; height:100vh; min-height:100vh; overflow:hidden; user-select:none; }
+  .ep-vn { position:relative; width:100vw; height:100vh; min-height:100vh; overflow:hidden; user-select:none; }
+  .ep-vn.panel { max-width:none; padding:0; margin:0; border:none; background:transparent; }
   .ep-fit { position:absolute; inset:0; display:flex; align-items:center; justify-content:center; overflow:hidden; }
-  .ep-stage { position:relative; width:1920px; height:1080px; transform-origin:0 0; }
+  .ep-stage { position:relative; width:1920px; height:1080px; transform-origin:50% 50%; }
   .ep-vn .layer-bg { position:absolute; inset:0; background:#0b0f1a center/cover no-repeat; }
   .ep-vn .layer-actors { position:absolute; inset:0; pointer-events:none; }
   .ep-vn .actor { position:absolute; transform-origin:50% 100%; }
@@ -236,9 +237,17 @@ export async function renderEpisodeVN(root, state, epId, userCfg){
       const vpW = Math.max(1, Math.floor((window.visualViewport && window.visualViewport.width) || window.innerWidth || document.documentElement.clientWidth || baseW));
       const vpH = Math.max(1, Math.floor((window.visualViewport && window.visualViewport.height) || window.innerHeight || document.documentElement.clientHeight || baseH));
       const maxScale = Math.min(vpW/baseW, vpH/baseH);
-      const scale = Math.max(0.5, Math.min(maxScale, (EP_DEFAULT_CFG.scale||0.92)));
-      stage.style.transform = `scale(${scale})`;
-      const fit = stage.parentElement; if(fit){ fit.style.width = vpW+'px'; fit.style.height = vpH+'px'; }
+      const scale = Math.max(0.5, maxScale);
+      // center stage within fit box (avoid right-bottom drift)
+      const fit = stage.parentElement; if(fit){
+        // fill viewport fully on mobile
+        fit.style.width = '100vw'; fit.style.height = '100vh';
+        const tx = Math.floor((vpW - baseW*scale)/2);
+        const ty = Math.floor((vpH - baseH*scale)/2);
+        stage.style.transform = `translate(${tx}px, ${ty}px) scale(${scale})`;
+      } else {
+        stage.style.transform = `scale(${scale})`;
+      }
     }catch{}
   }
   root.innerHTML=''; root.appendChild(wrap); resize();

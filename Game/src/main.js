@@ -87,8 +87,81 @@ window.newRunSeed = ()=>{
   }
   return window.__createRng(seed);
 };
+// ---- Fullscreen & responsive scaler (1920x1080 base) ----
+function upsertViewportMeta(){
+  try{
+    let m = document.querySelector('meta[name="viewport"]');
+    if(!m){ m=document.createElement('meta'); m.name='viewport'; document.head.appendChild(m); }
+    // lock landscape-friendly scaling on mobile
+    m.content = 'width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover';
+  }catch{}
+}
+
+function ensureFullscreenAndLandscape(){
+  // Try fullscreen (may require user gesture; we also hook first interaction below)
+  try{ if(document.fullscreenEnabled && !document.fullscreenElement){ document.documentElement.requestFullscreen().catch(()=>{}); } }catch{}
+  // Try orientation lock to landscape on supported browsers
+  try{ if(screen.orientation && screen.orientation.lock){ screen.orientation.lock('landscape').catch(()=>{}); } }catch{}
+}
+
+function applyGlobalScale(){
+  try{
+    const baseW = 1920, baseH = 1080;
+    const vw = (window.visualViewport && window.visualViewport.width) || window.innerWidth || document.documentElement.clientWidth || baseW;
+    const vh = (window.visualViewport && window.visualViewport.height) || window.innerHeight || document.documentElement.clientHeight || baseH;
+    const scale = Math.min(vw/baseW, vh/baseH);
+    const root = app.firstElementChild; // each view creates a .frame root
+    if(root && root.classList && root.classList.contains('frame')){
+      root.style.transformOrigin = '0 0';
+      root.style.width = baseW+'px';
+      root.style.height = baseH+'px';
+      root.style.transform = `scale(${scale})`;
+      // center
+      const px = Math.max(0, Math.floor((vw - baseW*scale)/2));
+      const py = Math.max(0, Math.floor((vh - baseH*scale)/2));
+      root.style.position='absolute'; root.style.left = px+'px'; root.style.top = py+'px';
+      document.body.style.overflow='hidden';
+      document.body.style.background = '#0b0f1a';
+    }
+    // Rotate prompt for portrait mobile
+    const isPortrait = vh > vw;
+    let prompt = document.getElementById('rotatePrompt');
+    if(isPortrait){
+      if(!prompt){
+        prompt = document.createElement('div'); prompt.id='rotatePrompt';
+        prompt.style.position='fixed'; prompt.style.inset='0'; prompt.style.background='rgba(0,0,0,0.85)';
+        prompt.style.display='flex'; prompt.style.alignItems='center'; prompt.style.justifyContent='center';
+        prompt.style.color='#cbd5e1'; prompt.style.fontSize='18px'; prompt.style.zIndex='9999';
+        prompt.innerHTML = '<div style="text-align:center;">기기를 가로로 돌려주세요<br/><span style="font-size:12px;opacity:.8;">Landscape mode required</span></div>';
+        document.body.appendChild(prompt);
+      }
+    } else {
+      if(prompt) prompt.remove();
+    }
+  }catch{}
+}
+
+function afterRenderAdjust(){
+  upsertViewportMeta();
+  applyGlobalScale();
+}
+
+// First interaction fallback to enable fullscreen/orientation lock
+let _fsTried=false;
+function tryFsOnInteract(){ if(_fsTried) return; _fsTried=true; ensureFullscreenAndLandscape(); document.removeEventListener('click', tryFsOnInteract); document.removeEventListener('keydown', tryFsOnInteract); }
+document.addEventListener('click', tryFsOnInteract, { once:false });
+document.addEventListener('keydown', tryFsOnInteract, { once:false });
+window.addEventListener('resize', applyGlobalScale);
+window.addEventListener('orientationchange', ()=>{ setTimeout(applyGlobalScale, 50); });
+
+ensureFullscreenAndLandscape();
 render('title');
+afterRenderAdjust();
 
 window.render = render;
+
+// Hook render to re-apply scaling after each view
+const _origRender = window.render;
+window.render = (v)=>{ _origRender(v); afterRenderAdjust(); };
 
 

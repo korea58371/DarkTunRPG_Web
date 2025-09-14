@@ -919,6 +919,25 @@ export function renderBattleView(root, state){
   root.innerHTML = '';
   root.appendChild(frame);
 
+  // Responsive fit (1920x1080 base)
+  function resize(){
+    try{
+      const baseW=1920, baseH=1080;
+      const vw = (window.visualViewport && window.visualViewport.width) || window.innerWidth || document.documentElement.clientWidth || baseW;
+      const vh = (window.visualViewport && window.visualViewport.height) || window.innerHeight || document.documentElement.clientHeight || baseH;
+      const scale = Math.min(vw/baseW, vh/baseH);
+      frame.style.transformOrigin='0 0';
+      frame.style.width=baseW+'px'; frame.style.height=baseH+'px';
+      frame.style.transform=`scale(${Math.max(0.5, scale)})`;
+      const px=Math.max(0, Math.floor((vw - baseW*scale)/2));
+      const py=Math.max(0, Math.floor((vh - baseH*scale)/2));
+      frame.style.position='absolute'; frame.style.left=px+'px'; frame.style.top=py+'px';
+    }catch{}
+  }
+  resize();
+  window.addEventListener('resize', resize, { passive:true });
+  window.addEventListener('orientationchange', ()=> setTimeout(resize, 50));
+
   // cheat panel (dev only) - appear outside game screen
   const oldCheat = document.getElementById('cheat-panel');
   if(oldCheat) oldCheat.remove();
@@ -1091,10 +1110,36 @@ export function renderBattleView(root, state){
         }
       }
       if(nextId){
-        delete state.ui.battle; state.ui.currentEpisode = nextId;
-        console.debug('[finish-nav-episode]', { nextId });
-        const btnEp = document.querySelector('nav button[data-view=episode]');
-        if(btnEp){ btnEp.click(); return; }
+        // R-*** 또는 EP-***/BT-*** 모두 처리
+        if(nextId.startsWith('R-')){
+          const nr = (state.data.routes||[]).find(rt=> rt.id===nextId);
+          if(nr){
+            // 루트 방문 처리
+            state.flags = state.flags || {}; state.flags.visitedRoutes = state.flags.visitedRoutes || {}; state.flags.runVisitedRoutes = state.flags.runVisitedRoutes || {};
+            state.flags.visitedRoutes[nr.id] = true; state.flags.runVisitedRoutes[nr.id] = true; state.flags.lastRouteId = nr.id;
+            if((nr.next||'').startsWith('EP-')){
+              delete state.ui.battle; state.ui.currentEpisode = nr.next;
+              console.debug('[finish-nav-after-route->episode]', { route: nr.id, ep: nr.next });
+              const btnEp = document.querySelector('nav button[data-view=episode]'); if(btnEp){ btnEp.click(); return; }
+            }
+            if((nr.next||'').startsWith('BT-')){
+              state.ui.battle = nr.next; state.ui.currentEpisode = null;
+              console.debug('[finish-nav-after-route->battle]', { route: nr.id, bt: nr.next });
+              const btnBt = document.querySelector('nav button[data-view=battle]'); if(btnBt){ btnBt.click(); return; }
+            }
+          }
+          // 루트만 지정되어 있고 즉시 EP/BT가 없다면 루트 선택 화면으로
+        } else if(nextId.startsWith('EP-')){
+          delete state.ui.battle; state.ui.currentEpisode = nextId;
+          console.debug('[finish-nav-episode]', { nextId });
+          const btnEp = document.querySelector('nav button[data-view=episode]');
+          if(btnEp){ btnEp.click(); return; }
+        } else if(nextId.startsWith('BT-')){
+          state.ui.battle = nextId; state.ui.currentEpisode = null;
+          console.debug('[finish-nav-battle]', { nextId });
+          const btnBt = document.querySelector('nav button[data-view=battle]');
+          if(btnBt){ btnBt.click(); return; }
+        }
       }
       // EP-220 처리는 episode 화면에서 resetState가 수행됨
       state.ui.currentEpisode = null; state.ui.battle = null;

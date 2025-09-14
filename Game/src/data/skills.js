@@ -1,7 +1,7 @@
 export const SKILL_CFG = { baseGain: 10, missMul: 0.5, baseNext: 20, curveMul: 1.35, curveAdd: 5 };
 
 export const SKILLS = {
-  'SK-01': { id:'SK-01', name:'베기', range:'melee', type:'strike', hits:1, acc:1, accAdd:0, coeff:1, cost:{mp:0}, damageType:'slash', move:{who:'target', dir:'back', tiles:1, required:true, allowedDirs:['forward','back','up','down','upLeft','upRight','downLeft','downRight']}, bleed:{ chance:0.5, duration:3, coeff:0.3 }, upgrades:[{ id:'SK01_ROW', name:'일열 공격', desc:'공격 범위가 전열 전체로 변경(1회 선택) 대미지 감소', type:'once', effects:[{ path:'type', op:'set', value:"row" }, { path:'to', op:'set', value:[1] }] }, { id:'SK01_DMG30', name:'대미지 +30%', desc:'스킬 대미지 30% 증가(중첩 가능)', type:'stack', effects:[{ path:'coeff', op:'mul', value:1.3 }] }, { id:'SK01_BLEED', name:'적중 시 출혈', desc:'적중 시 3턴 출혈(계수 0.3)(1회 선택)', type:'once', effects:[{ path:'bleed', op:'set', value:{"chance":1,"duration":3,"coeff":0.3} }] }] },
+  'SK-01': { id:'SK-01', name:'베기', range:'melee', type:'strike', hits:1, acc:1, accAdd:0, coeff:1, cost:{mp:0}, damageType:'slash', upgrades:[{ id:'SK01_ROW', name:'일열 공격', desc:'공격 범위가 전열 전체로 변경(1회 선택) 대미지 감소', type:'once', effects:[{ path:'type', op:'set', value:"row" }, { path:'to', op:'set', value:[1] }] }, { id:'SK01_DMG30', name:'대미지 +30%', desc:'스킬 대미지 30% 증가(중첩 가능)', type:'stack', effects:[{ path:'coeff', op:'mul', value:1.3 }] }, { id:'SK01_BLEED', name:'적중 시 출혈', desc:'적중 시 3턴 출혈 효과 (1회 선택)', type:'once', effects:[{ path:'bleed', op:'set', value:{"chance":0.5,"duration":3,"coeff":0.3} }] }] },
   'SK-02': { id:'SK-02', name:'활쏘기', range:'ranged', type:'strike', hits:1, acc:1.1, accAdd:0, coeff:1, cost:{mp:0}, damageType:'pierce', upgrades:[{ id:'SK-02-', name:'명중 강화', desc:'명중률 +50% 증가', type:'once', effects:[{ path:'accAdd', op:'add', value:0.5 }] }] },
   'SK-03': { id:'SK-03', name:'마구 베기', range:'melee', type:'multi', hits:3, acc:0.7, accAdd:0, coeff:0.6, cost:{mp:2}, damageType:'slash' },
   'SK-10': { id:'SK-10', name:'해골 베기', range:'melee', type:'strike', hits:2, acc:0.85, accAdd:0, coeff:1.2, cost:{mp:0}, damageType:'slash' },
@@ -19,6 +19,7 @@ export const SKILLS = {
   'SK-FIREBALL': { id:'SK-FIREBALL', name:'파이어볼', range:'ranged', type:'strike', hits:1, acc:1, coeff:1.1, cost:{mp:2}, shout:'파이어볼!', damageType:'magic' },
   'SK-MOVE-1': { id:'SK-MOVE-1', name:'신속 이동', range:'ally', type:'move', cost:{mp:0}, shout:'이동!', move:{who:'actor', tiles:1, required:true, allowedDirs:['forward','back','up','down','upLeft','upRight','downLeft','downRight']} }
 };
+
 
 
 

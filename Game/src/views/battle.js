@@ -166,8 +166,8 @@ export function renderBattleView(root, state){
           // 원근감: row가 높을수록 슬롯 사이즈 증가
           try{
             const inner = el.querySelector('.inner');
-            const baseScale = 1; // 크기 통일
-            const rowScale = 1;  // 행에 따른 크기 변화 없음
+            const baseScale = 1.5; // 기본 크기 1.5배
+            const rowScale = Math.pow(1.2, Math.max(0, (rowNum||1) - 1)); // row가 커질수록 1.2배씩 증가
             const imgScale = 1;  // 이미지 스케일 고정
             inner.style.transformOrigin = 'bottom center';
             inner.style.transform = `scale(${Math.round(baseScale*rowScale*imgScale*100)/100})`;
@@ -438,14 +438,17 @@ export function renderBattleView(root, state){
     if(!selectedSkill) return;
     if(selectedSkill.range==='ally') return; // no enemy AOE highlight for ally skills
     const es = getEffectiveSkill(selectedSkill);
+    // 잘못된 대상 선택 시(예: 근접 제한 위반) 하이라이트를 출력하지 않음
+    const fallbackTid = selectedTarget || B.target;
+    if(!canExecute(es, fallbackTid)) return;
     if(es.type==='row'){
       let targetRow = null;
       if(Array.isArray(es.to) && es.to.length===1){ targetRow = es.to[0]; }
-      else if(selectedTarget){ targetRow = B.units[selectedTarget]?.row || null; }
+      else if(fallbackTid){ targetRow = B.units[fallbackTid]?.row || null; }
       if(!targetRow) return;
       B.enemyOrder.forEach(id=>{ if(!id) return; const u=B.units[id]; if(!u) return; if(u.row===targetRow){ const el = enemyLane.querySelector(`.unit-slot[data-unit-id="${id}"]`); if(el) el.classList.add('is-aoe'); } });
-    } else if(es.type==='line' && selectedTarget){
-      const col = B.units[selectedTarget]?.col;
+    } else if(es.type==='line' && fallbackTid){
+      const col = B.units[fallbackTid]?.col;
       B.enemyOrder.forEach(id=>{ if(!id) return; const u=B.units[id]; if(!u) return; if(u.col===col){ const el = enemyLane.querySelector(`.unit-slot[data-unit-id="${id}"]`); if(el) el.classList.add('is-aoe'); } });
     } else if(es.type==='cross' && selectedTarget){
       const r = B.units[selectedTarget]?.row; const c = B.units[selectedTarget]?.col;
@@ -468,6 +471,8 @@ export function renderBattleView(root, state){
     // 대상 집합 구하기: 단일/라인/로우
     let targetIds = [];
     const fallbackTid = selectedTarget || B.target;
+    // 근접/라인 등 제한을 다시 한 번 검증하여 잘못된 하이라이트 방지
+    if(!canExecute(es, fallbackTid)) return;
     if(es.range==='ally'){
       // only ally target; show hint on selected ally target only
       if(fallbackTid && B.allyOrder.includes(fallbackTid)) targetIds = [fallbackTid];
@@ -480,7 +485,16 @@ export function renderBattleView(root, state){
       if(targetRow){ targetIds = B.enemyOrder.filter(id=>id && (B.units[id]?.hp>0) && (B.units[id]?.row===targetRow)); }
     } else if(es.type==='line'){
       if(!fallbackTid) return; const col = B.units[fallbackTid]?.col;
-      targetIds = B.enemyOrder.filter(id=>id && (B.units[id]?.hp>0) && (B.units[id]?.col===col));
+      // 근접 무기 등 전열 제한이 있는 경우, 가장 앞열의 해당 col만 유효하게 취급
+      const alive = B.enemyOrder.filter(id=> id && (B.units[id]?.hp>0));
+      const minCol = alive.length? Math.min(...alive.map(id=> B.units[id]?.col ?? 999)) : null;
+      targetIds = B.enemyOrder.filter(id=>{
+        if(!id) return false; const u=B.units[id]; if(!u || !(u.hp>0)) return false;
+        if(u.col!==col) return false;
+        // 만약 선택 대상 col이 최전열이 아니라면, 하이라이트를 막아 시각 버그 방지
+        if(minCol!=null && col!==minCol) return false;
+        return true;
+      });
     } else {
       if(!fallbackTid) return; targetIds = [fallbackTid];
     }

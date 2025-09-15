@@ -1,7 +1,23 @@
-export const BATTLES = {
+export const BATTLES = 
+{
   "BT-100": {
     "id": "BT-100",
     "enemy": [
+      {
+        "unit": "E-101",
+        "row": 1,
+        "col": 0
+      },
+      {
+        "unit": "E-101",
+        "row": 1,
+        "col": 1
+      },
+      {
+        "unit": "E-101",
+        "row": 1,
+        "col": 2
+      },
       {
         "unit": "E-101",
         "row": 2,
@@ -11,12 +27,32 @@ export const BATTLES = {
         "unit": "E-102",
         "row": 2,
         "col": 1
+      },
+      {
+        "unit": "E-101",
+        "row": 2,
+        "col": 2
+      },
+      {
+        "unit": "E-101",
+        "row": 3,
+        "col": 0
+      },
+      {
+        "unit": "E-101",
+        "row": 3,
+        "col": 1
+      },
+      {
+        "unit": "E-101",
+        "row": 3,
+        "col": 2
       }
     ],
     "seed": 0,
     "winNext": "R-101",
     "loseNext": "",
-    "bg": "BG_002.png",
+    "bg": "BG_002.png"
   },
   "BT-200": {
     "id": "BT-200",
@@ -61,4 +97,5 @@ export const BATTLES = {
     "winNext": "EP-900",
     "bg": "BG_001.png"
   }
-};
+}
+;

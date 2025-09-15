@@ -95,6 +95,15 @@ export function renderBattleView(root, state){
     const title = document.createElement('div'); title.className='title'; title.textContent = side==='ally' ? '아군' : '적군';
     laneEl.appendChild(title);
     const rows = document.createElement('div'); rows.className='rows';
+    // 보드 전체를 약간 아래쪽으로 이동시켜 하단에 몰리게 함
+    try{ rows.style.top = '300px'; }catch{}
+    // 세로 간격(행 간 y 간격) 축소
+    try{ rows.style.rowGap = '2px'; }catch{}
+    // 원근감: row가 높을수록 세로 공간을 더 크게 배분
+    try{
+      const rowHeights = [0.8, 1.15, 1.3]; // 1열 < 2열 < 3열
+      rows.style.gridTemplateRows = rowHeights.map(v=> `${v}fr`).join(' ');
+    }catch{}
 
     // UI index mapping: 레이아웃(CSS)에서 이미 아군 보드를 좌우 반전하고 있다면
     // 여기서는 추가 반전 없이 로컬 col을 그대로 사용한다.
@@ -113,9 +122,19 @@ export function renderBattleView(root, state){
     const orderRows = [1,2,3];
     orderRows.forEach(rowNum=>{
       const wrap = document.createElement('div'); wrap.className='row-wrap';
+      // 원근감: row가 높을수록 같은 열 간격을 넓게
+      try{
+        const baseGap=150, addPerRow=30;
+        wrap.style.columnGap = `${baseGap + (rowNum-1)*addPerRow}px`;
+        // 열을 내용 너비로 만들고 가운데 정렬하여 gap이 실제 간격으로 작동하게 함
+        wrap.style.gridTemplateColumns = 'repeat(3, max-content)';
+        wrap.style.justifyContent = 'left';
+      }catch{}
       const line = toLine(rowNum); // [col0, col1, col2]
-      line.forEach(id=>{
+      line.forEach((id, colIndex)=>{
         const slot = document.createElement('div'); slot.className='slot';
+        // 원근감: col이 높을수록 약간의 좌측 마진으로 간격 확대
+        try{ const perCol = 8; slot.style.marginLeft = `${Math.max(0, colIndex)*perCol}px`; }catch{}
         if(id){
           const u = B.units[id];
           const el = document.createElement('div'); el.className='unit-slot'; if(u.large) el.classList.add('large'); el.dataset.unitId = id;
@@ -131,6 +150,14 @@ export function renderBattleView(root, state){
             return buf.join('');
           })();
           el.innerHTML = `<div class=\"inner\"><div class=\"portrait\"></div><div class=\"hpbar\"><span style=\"width:${Math.max(0,(u.hp/u.hpMax)*100)}%\"></span><i class=\"pred\" style=\"width:0%\"></i></div><div class=\"shieldbar\" style=\"display:${(u.shield||0)>0?'block':'none'};\"><span style=\"width:${Math.max(0, Math.min(100, ((u.shield||0)/(u.hpMax||1))*100))}%\"></span></div></div><div class=\"slot-buffs\">${buffsHtml}</div><div class=\"name-label\">${u.name}</div>`;
+          // 원근감: row가 높을수록 슬롯 사이즈 증가
+          try{
+            const inner = el.querySelector('.inner');
+            const baseScale = (u.large? 1.6 : 1);
+            const rowScale = 0.8 + (rowNum-1)*0.2; // 1.00, 1.12, 1.24
+            inner.style.transformOrigin = 'bottom center';
+            inner.style.transform = `scale(${Math.round(baseScale*rowScale*100)/100})`;
+          }catch{}
           el.onmouseenter=(e)=>{ window.UI_TIP?.showTooltip(`${u.name}\nHP ${u.hp}/${u.hpMax} · MP ${(u.mp||0)} · SPD ${u.spd}\nATK ${u.atk} · DEF ${u.def}`, e.clientX, e.clientY); };
           el.onmousemove=(e)=>{ window.UI_TIP?.positionTip(e.clientX, e.clientY); };
           el.onmouseleave=()=> window.UI_TIP?.hideTooltip();
@@ -870,7 +897,14 @@ export function renderBattleView(root, state){
             setTimeout(()=>{ 
               console.debug?.('[death-end]', toId, 'removed');
               if(fx.parentElement) fx.remove(); 
-              if(slotEl.parentElement) slotEl.remove(); 
+              // 즉시 DOM 제거 대신 고스트로 전환하여 레이아웃 유지
+              try{
+                slotEl.classList.remove('fade-out');
+                slotEl.classList.add('ghost');
+                slotEl.innerHTML = '';
+                slotEl.style.opacity = '0';
+                try{ delete slotEl.dataset.unitId; }catch{}
+              }catch{}
             }, 800);
           } else {
             console.warn?.('[death-fail]', toId, 'slot not found in', lane?.className, 'wasEnemy:', wasEnemy);
@@ -931,8 +965,7 @@ export function renderBattleView(root, state){
             let icon = slotEl.querySelector('.slot-buffs .bleed');
             if(icon){ const t = icon.querySelector('.turns'); if(t){ const next = Math.max(0, Number(t.textContent||'1') - 1); t.textContent = `${next}`; if(next<=0) icon.remove(); } }
           }
-        }
-      }, scheduleAt);
+        }      }, scheduleAt);
     });
     B.log.length = 0;
     // end marker
@@ -1196,5 +1229,6 @@ export function renderBattleView(root, state){
 
 // remove cheat panel when leaving battle (expose cleanup)
 window.addEventListener('beforeunload', ()=>{ const c=document.getElementById('cheat-panel'); if(c) c.remove(); });
+
 
 

@@ -50,12 +50,24 @@ export function createBattleState(state, battle){
     const persistedHp = state.persist?.hp?.[baseId];
     const persistedMp = state.persist?.mp?.[baseId];
     const hpMax = base.hpMax ?? base.hp;
+    // 영구 사망(ownedUnits[baseId]===false)이면 아예 스폰하지 않음
+    const permanentlyDead = (state.ownedUnits && state.ownedUnits[baseId] === false);
+    if(permanentlyDead){
+      try{ console.debug('[spawn-skip:permanent-death]', { baseId, tag }); }catch{}
+      return null;
+    }
     const hp = Math.max(0, Math.min(hpMax, (persistedHp ?? base.hp)));
     const mp = Math.max(0, Math.min(mpMax, (persistedMp ?? mpMax)));
     units[id] = { ...base, id, hp, hpMax, row, col, mp, mpMax };
     return id;
   };
-  const allyOrder = state.party.members.map((id,i)=>inst(id,'A',i)).filter(Boolean);
+  // 파티 멤버 목록에서 영구 사망자 제거(회차 내)
+  try{
+    if(Array.isArray(state.party?.members)){
+      state.party.members = state.party.members.map(id=> (state.ownedUnits && state.ownedUnits[id]===false)? null : id);
+    }
+  }catch{}
+  let allyOrder = state.party.members.map((id,i)=>inst(id,'A',i)).filter(Boolean);
   const enemyOrder = (battle.enemy||[]).map((entry,i)=>{
     if(!entry) return null;
     if(typeof entry === 'string') return inst(entry,'E',i,null);
@@ -86,8 +98,18 @@ export function createBattleState(state, battle){
     const owned = state.ownedUnits || {};
     for(let i=0;i<allyOrder.length;i++){
       const id = allyOrder[i]; if(!id) continue; const base = id.split('@')[0];
-      if(owned[base] === false){ allyOrder[i]=null; delete units[id]; }
+      if(owned[base] === false){ 
+        console.debug('[permDeath:exclude]', { base, reason:'owned=false' });
+        allyOrder[i]=null; delete units[id]; 
+      }
+      // 추가: 이미 HP 0인 유닛도 배치 제외 (부활 방지)
+      else if((units[id]?.hp || 0) <= 0){ 
+        console.debug('[permDeath:exclude]', { base, reason:'hp<=0' });
+        allyOrder[i]=null; delete units[id]; 
+      }
     }
+    // null 제거하여 allyOrder에 빈 칸이 남지 않도록
+    allyOrder = allyOrder.filter(Boolean);
   }catch{}
   // Enforce unique (row,col) per enemy; if collision, place to next available slot (row/col)
   const occ = { 1:[null,null,null], 2:[null,null,null], 3:[null,null,null] };
@@ -219,7 +241,7 @@ export function pickTarget(state, battleState, isAlly, sk){
     let cols = alive.map(id=> battleState.units[id]?.col ?? 999);
     if(!isAlly){ cols = cols.map(c=> 2 - c); } // 적 관점: 아군 col 반전
     const minCol = Math.min(...cols);
-    try{ console.warn('[pickTarget:melee]', { actor: battleState.turnUnit, pool: alive.map(id=>({id, col:battleState.units[id]?.col, row:battleState.units[id]?.row})), minCol }); }catch{}
+    
     // 플레이어가 선택한 타겟이 최전열(minCol)에 있으면 그 타겟을 그대로 사용
     if(battleState.target && pool.includes(battleState.target)){
       const tCol = battleState.units[battleState.target]?.col;
@@ -230,7 +252,7 @@ export function pickTarget(state, battleState, isAlly, sk){
     // tie-breaker: smallest row first
     frontCol.sort((a,b)=> (battleState.units[a]?.row||9) - (battleState.units[b]?.row||9));
     const selected = frontCol[0] || null;
-    try{ console.warn('[pickTarget:selected]', { actor: battleState.turnUnit, selected }); }catch{}
+    
     return selected;
   }
   // ranged: any alive enemy
@@ -246,7 +268,7 @@ export function pickTarget(state, battleState, isAlly, sk){
     let cols = alive.map(id=> battleState.units[id]?.col ?? 999);
     if(!isAlly){ cols = cols.map(c=> 2 - c); }
     const minCol = Math.min(...cols);
-    try{ console.warn('[pickTarget:implicit-melee]', { actor: battleState.turnUnit, pool: alive.map(id=>({id, col:battleState.units[id]?.col, row:battleState.units[id]?.row})), minCol }); }catch{}
+    
     if(battleState.target && pool.includes(battleState.target)){
       const tCol = battleState.units[battleState.target]?.col;
       const adjustedTCol = isAlly ? tCol : (2 - tCol);
@@ -255,7 +277,7 @@ export function pickTarget(state, battleState, isAlly, sk){
     const frontCol = alive.filter((id,i)=> (isAlly ? battleState.units[id]?.col : (2 - battleState.units[id]?.col)) === minCol);
     frontCol.sort((a,b)=> (battleState.units[a]?.row||9) - (battleState.units[b]?.row||9));
     const selected = frontCol[0] || null;
-    try{ console.warn('[pickTarget:selected-implicit]', { actor: battleState.turnUnit, selected }); }catch{}
+    
     return selected;
   }
   // fallback: previous behavior
@@ -358,6 +380,21 @@ export function performSkill(state, battleState, actor, sk){
     Object.values(dmgGroup).forEach(v=>{ res.dmgMul = res.dmgMul * (v.mul||1); });
     return res;
   };
+  function markPermanentDeath(baseId){
+    try{
+      state.ownedUnits = state.ownedUnits || {};
+      if(state.ownedUnits[baseId] !== false){ state.ownedUnits[baseId] = false; }
+      state.persist = state.persist || { hp:{}, mp:{} };
+      state.persist.hp = state.persist.hp || {}; state.persist.mp = state.persist.mp || {};
+      state.persist.hp[baseId] = 0; state.persist.mp[baseId] = 0;
+      // 파티에서 제거
+      if(Array.isArray(state.party?.members)){
+        state.party.members = state.party.members.map(id=> id===baseId? null : id);
+      }
+      if(state.party?.positions && state.party.positions[baseId]) delete state.party.positions[baseId];
+      console.warn('[permDeath:mark]', { baseId });
+    }catch{}
+  }
   const tryHitOnce = (fromId, attacker, toId, target, skill)=>{
     // hit check
     const rawAcc = clamp01(skill.acc ?? 1);
@@ -431,6 +468,7 @@ export function performSkill(state, battleState, actor, sk){
     target.hp -= remaining;
     battleState.log.push({ type:'hit', from: fromId, to: toId, dmg, crit, blocked, skill: skill.id, isMulti: (skill.hits||1)>1, hp: target.hp, shield: target.shield||0 });
     const died = target.hp<=0;
+    if(died){ try{ console.warn('[death-detected]', { to: toId, hp: target.hp, from: fromId, skill: skill.id }); }catch{} }
     return { missed:false, died };
   };
   function applyOnHitStatuses(attackerId, attackerUnit, targetId, targetUnit, sk){
@@ -516,14 +554,16 @@ export function performSkill(state, battleState, actor, sk){
         if(res.died){ died=true; break; }
       }
       if(died){
+        const wasAllyTarget = (pool === battleState.allyOrder);
+        const base = tid.split('@')[0];
+        if(wasAllyTarget){ if(!battleState.deadAllies.includes(base)) battleState.deadAllies.push(base); markPermanentDeath(base); }
         const idx = pool.indexOf(tid); if(idx>-1) pool[idx]=null;
         const qi = battleState.queue.indexOf(tid); if(qi>-1) battleState.queue.splice(qi,1);
         battleState.log.push({ type:'dead', to: tid });
-        if(battleState.allyOrder.includes(tid)) battleState.deadAllies.push(tid.split('@')[0]);
         try{
           const eAlive = battleState.enemyOrder.filter(id=>id && (battleState.units[id]?.hp>0)).length;
           const aAlive = battleState.allyOrder.filter(id=>id && (battleState.units[id]?.hp>0)).length;
-          console.debug?.('[core-death-row]', { battleId: battleState.id, to: tid, eAlive, aAlive });
+          console.warn('[core-death-row]', { battleId: battleState.id, to: tid, eAlive, aAlive });
         }catch{}
       }
     });
@@ -545,14 +585,16 @@ export function performSkill(state, battleState, actor, sk){
         if(res.died){ died=true; break; }
       }
       if(died){
+        const wasAllyTarget = (pool === battleState.allyOrder);
+        const base = tid.split('@')[0];
+        if(wasAllyTarget){ if(!battleState.deadAllies.includes(base)) battleState.deadAllies.push(base); markPermanentDeath(base); }
         const idx = pool.indexOf(tid); if(idx>-1) pool[idx]=null;
         const qi = battleState.queue.indexOf(tid); if(qi>-1) battleState.queue.splice(qi,1);
         battleState.log.push({ type:'dead', to: tid });
-        if(battleState.allyOrder.includes(tid)) battleState.deadAllies.push(tid.split('@')[0]);
         try{
           const eAlive = battleState.enemyOrder.filter(id=>id && (battleState.units[id]?.hp>0)).length;
           const aAlive = battleState.allyOrder.filter(id=>id && (battleState.units[id]?.hp>0)).length;
-          console.debug?.('[core-death-line]', { battleId: battleState.id, to: tid, eAlive, aAlive });
+          console.warn('[core-death-line]', { battleId: battleState.id, to: tid, eAlive, aAlive });
         }catch{}
       }
     });
@@ -645,10 +687,12 @@ export function performSkill(state, battleState, actor, sk){
         if(res.died){ died=true; break; }
       }
       if(died){
+        const wasAllyTarget = (pool === battleState.allyOrder);
+        const base = tid.split('@')[0];
+        if(wasAllyTarget){ if(!battleState.deadAllies.includes(base)) battleState.deadAllies.push(base); markPermanentDeath(base); }
         const idx = pool.indexOf(tid); if(idx>-1) pool[idx]=null;
         const qi = battleState.queue.indexOf(tid); if(qi>-1) battleState.queue.splice(qi,1);
         battleState.log.push({ type:'dead', to: tid });
-        if(battleState.allyOrder.includes(tid)) battleState.deadAllies.push(tid.split('@')[0]);
       }
     });
   } else {
@@ -665,14 +709,16 @@ export function performSkill(state, battleState, actor, sk){
       }
     }
     if(died){
+      const wasAllyTarget = (pool === battleState.allyOrder);
+      const base = (targetId||'').split('@')[0];
+      if(wasAllyTarget){ if(!battleState.deadAllies.includes(base)) battleState.deadAllies.push(base); markPermanentDeath(base); }
       const idx = pool.indexOf(targetId); if(idx>-1) pool[idx]=null;
       const qi = battleState.queue.indexOf(targetId); if(qi>-1) battleState.queue.splice(qi,1);
       battleState.log.push({ type:'dead', to: targetId });
-      if(battleState.allyOrder.includes(targetId)) battleState.deadAllies.push(targetId.split('@')[0]);
       try{
         const eAlive = battleState.enemyOrder.filter(id=>id && (battleState.units[id]?.hp>0)).length;
         const aAlive = battleState.allyOrder.filter(id=>id && (battleState.units[id]?.hp>0)).length;
-        console.debug?.('[core-death-single]', { battleId: battleState.id, to: targetId, eAlive, aAlive });
+        console.warn('[core-death-single]', { battleId: battleState.id, to: targetId, eAlive, aAlive });
       }catch{}
     }
     // 루프 내에서 이동 처리했으므로 추가 이동 없음
@@ -690,7 +736,6 @@ export function performSkill(state, battleState, actor, sk){
     battleState.lastTarget[actorId] = targetId;
   }
   const __logAfter = (battleState.log||[]).length;
-  console.debug?.('[skill-queue]', sk.id, 'events+', (__logAfter-__logBefore), { total: __logAfter, targetId });
 
   // === 스킬 경험치/레벨업 처리(아군만) ===
   try{
@@ -757,7 +802,11 @@ export function applyTurnStartEffects(battleState){
       const idx = pool.indexOf(u.id); if(idx>-1) pool[idx] = null;
       const qi = battleState.queue.indexOf(u.id); if(qi>-1) battleState.queue.splice(qi,1);
       battleState.log.push({ type:'dead', to: u.id });
-      if(battleState.allyOrder.includes(u.id)) battleState.deadAllies.push(u.id.split('@')[0]);
+      if(battleState.allyOrder.includes(u.id)){
+        const base = u.id.split('@')[0];
+        battleState.deadAllies.push(base);
+        try{ markPermanentDeath(base); }catch{}
+      }
       // 다음 턴 유닛 갱신
       battleState.turnUnit = battleState.queue[0] || null;
       try{
@@ -784,7 +833,11 @@ export function applyTurnStartEffects(battleState){
       const idx = pool.indexOf(u.id); if(idx>-1) pool[idx] = null;
       const qi = battleState.queue.indexOf(u.id); if(qi>-1) battleState.queue.splice(qi,1);
       battleState.log.push({ type:'dead', to: u.id });
-      if(battleState.allyOrder.includes(u.id)) battleState.deadAllies.push(u.id.split('@')[0]);
+      if(battleState.allyOrder.includes(u.id)){
+        const base = u.id.split('@')[0];
+        battleState.deadAllies.push(base);
+        try{ markPermanentDeath(base); }catch{}
+      }
       battleState.turnUnit = battleState.queue[0] || null;
       try{
         const eAlive = battleState.enemyOrder.filter(id=>id && (battleState.units[id]?.hp>0)).length;
@@ -805,7 +858,11 @@ export function applyTurnStartEffects(battleState){
       const idx = pool.indexOf(u.id); if(idx>-1) pool[idx] = null;
       const qi = battleState.queue.indexOf(u.id); if(qi>-1) battleState.queue.splice(qi,1);
       battleState.log.push({ type:'dead', to: u.id });
-      if(battleState.allyOrder.includes(u.id)) battleState.deadAllies.push(u.id.split('@')[0]);
+      if(battleState.allyOrder.includes(u.id)){
+        const base = u.id.split('@')[0];
+        battleState.deadAllies.push(base);
+        try{ markPermanentDeath(base); }catch{}
+      }
       battleState.turnUnit = battleState.queue[0] || null;
       return;
     }
@@ -815,8 +872,8 @@ export function applyTurnStartEffects(battleState){
 export function isBattleFinished(battleState){
   const enemyAlive = battleState.enemyOrder.some(id=>id && (battleState.units[id]?.hp>0));
   const allyAlive = battleState.allyOrder.some(id=>id && (battleState.units[id]?.hp>0));
-  if(!enemyAlive && allyAlive){ battleState.winner = 'ally'; return true; }
-  if(!allyAlive && enemyAlive){ battleState.winner = 'enemy'; return true; }
+  const finished = (!enemyAlive && allyAlive) || (!allyAlive && enemyAlive);
+  if(finished){ battleState.winner = (!enemyAlive && allyAlive) ? 'ally' : 'enemy'; return true; }
   return false;
 }
 

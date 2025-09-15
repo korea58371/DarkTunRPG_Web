@@ -68,6 +68,11 @@ export function applyEffects(state, effects){
     if(e.type==='party.add'){
       const id = e.unit;
       if(!state.ownedUnits) state.ownedUnits={};
+      // 회차 내 영구 사망자는 재영입 금지
+      if(state.ownedUnits[id] === false){
+        console.warn('[party.add] blocked due to permanent death', { id });
+        return;
+      }
       state.ownedUnits[id] = true; // 보유 획득
       // 기본 자동 배치: 선호 행(preferredRows) 우선, 후열→중열→전열 기본
       const pref = state.data?.units?.[id]?.preferredRows || [3,2,1];

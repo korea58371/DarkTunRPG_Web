@@ -20,14 +20,9 @@ export function renderBattleView(root, state){
   `;
 
   // 초기 전투 상태 준비 (파티 변경 시 재생성)
-  if(state.ui.battleState){
-    const snap = state.ui.battleState.partySnapshot || [];
-    const posSnap = state.ui.battleState.positionsSnapshot || {};
-    const sameParty = JSON.stringify(snap) === JSON.stringify(state.party.members||[]);
-    const samePos = JSON.stringify(posSnap) === JSON.stringify(state.party.positions||{});
-    if(!sameParty || !samePos) delete state.ui.battleState;
-  }
-  if(!state.ui.battleState){
+  // 기존: party/positions 스냅샷 비교로 중간에 캐시를 삭제했음 → 전투 중 사망 처리로 party가 바뀌면 적이 부활하는 문제 유발
+  // 수정: battle id가 바뀔 때만 새로 생성
+  if(!state.ui.battleState || state.ui.battleState.id !== (bt.id||btid)){
     state.ui.battleState = window.BATTLE.createBattleState(state, bt);
   }
   const B = state.ui.battleState;
@@ -298,6 +293,7 @@ export function renderBattleView(root, state){
 
   function canExecute(sk, targetId){
     if(!sk) return false;
+    if(B.turnUnit !== actor.id) return false;
     // MP check
     if((actor.mp||0) < (sk.cost?.mp||0)) return false;
     // 배우 선이동이 필수인 스킬(공격/효과 동반): 이동 불가하면 사용 불가
@@ -543,6 +539,7 @@ export function renderBattleView(root, state){
       card.innerHTML = `${titleLine}${attrLine}${hitLine}${(dmgLine?dmgLineHtml:'')}${extraHtml}<div class="cost">MP ${sk.cost?.mp||0}</div>`;
       card.onclick=async (ev)=>{
         // if already selected and executable → use skill immediately
+        if(B.turnUnit !== actor.id) return;
         const already = selectedSkill?.id === sk.id;
         // 스킬 전환 시 기존 이동 오버레이 정리
         if(cleanupMoveOverlay){ try{ cleanupMoveOverlay(); }catch{} cleanupMoveOverlay=null; }
@@ -608,6 +605,7 @@ export function renderBattleView(root, state){
       const id = el.dataset.unitId;
       el.onclick = async (ev)=>{
         if(!id) return;
+        if(B.turnUnit !== actor.id) return;
         // 슬롯 클릭 시 남아있는 이동 오버레이 정리
         if(cleanupMoveOverlay){ try{ cleanupMoveOverlay(); }catch{} cleanupMoveOverlay=null; }
         const already = (B.target===id);
@@ -1069,14 +1067,20 @@ export function renderBattleView(root, state){
         state.persist.hp[baseId] = u.hp;
         state.persist.mp[baseId] = u.mp;
       });
-      // 영구 사망 처리: 이번 전투에서 죽은 아군 제거
+      // 영구 사망 처리: 이번 전투에서 죽은 아군을 회차 내에서 비활성화
       if(B.deadAllies && B.deadAllies.length){
         const deadSet = new Set(B.deadAllies);
-        if(state.ownedUnits){ Object.keys(state.ownedUnits).forEach(id=>{ if(deadSet.has(id)) delete state.ownedUnits[id]; }); }
+        state.ownedUnits = state.ownedUnits || {};
+        B.deadAllies.forEach(baseId=>{ state.ownedUnits[baseId] = false; });
         if(Array.isArray(state.party?.members)){
           state.party.members = state.party.members.map(id=> (id && deadSet.has(id)? null : id));
         }
         if(state.party?.positions){ Object.keys(state.party.positions).forEach(id=>{ if(deadSet.has(id)) delete state.party.positions[id]; }); }
+        // persist는 0으로 고정하여 다음 전투에서도 HP 0 유지(부활 방지)
+        state.persist = state.persist || { hp:{}, mp:{} };
+        state.persist.hp = state.persist.hp || {};
+        state.persist.mp = state.persist.mp || {};
+        B.deadAllies.forEach(baseId=>{ state.persist.hp[baseId] = 0; state.persist.mp[baseId] = 0; });
       }
       // 전투 결과 플래그 기록(분기용)
       try{
@@ -1092,18 +1096,19 @@ export function renderBattleView(root, state){
       const btData = state.data?.battles?.[curBid];
       const nextId = isWin ? (btData?.winNext || null) : (btData?.loseNext || null);
       console.debug('[finish-next]', { curBid, isWin, nextId, btData });
-      // 이번 전투에서 사망한 아군은 보유/덱/영구 데이터에서 제거
+      // 이번 전투에서 사망한 아군은 보유/덱/영구 데이터에서 비활성화
       if(B.deadAllies && B.deadAllies.length){
         const deadSet = new Set(B.deadAllies);
-        if(state.ownedUnits){ Object.keys(state.ownedUnits).forEach(id=>{ if(deadSet.has(id)) delete state.ownedUnits[id]; }); }
+        state.ownedUnits = state.ownedUnits || {};
+        B.deadAllies.forEach(baseId=>{ state.ownedUnits[baseId] = false; });
         if(Array.isArray(state.party?.members)){
           state.party.members = state.party.members.map(id=> (id && deadSet.has(id)? null : id));
         }
         if(state.party?.positions){ Object.keys(state.party.positions).forEach(id=>{ if(deadSet.has(id)) delete state.party.positions[id]; }); }
-        if(state.persist){
-          if(state.persist.hp){ Object.keys(state.persist.hp).forEach(id=>{ if(deadSet.has(id)) delete state.persist.hp[id]; }); }
-          if(state.persist.mp){ Object.keys(state.persist.mp).forEach(id=>{ if(deadSet.has(id)) delete state.persist.mp[id]; }); }
-        }
+        state.persist = state.persist || { hp:{}, mp:{} };
+        state.persist.hp = state.persist.hp || {};
+        state.persist.mp = state.persist.mp || {};
+        B.deadAllies.forEach(baseId=>{ state.persist.hp[baseId] = 0; state.persist.mp[baseId] = 0; });
       }
       // EP로 이동하는 경우: 그 EP로 이어지는 루트를 자동 방문 처리(재선택 방지)
       if(nextId && nextId.startsWith('EP-')){

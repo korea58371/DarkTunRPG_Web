@@ -782,13 +782,9 @@ export function renderBattleView(root, state){
           const picks = [];
           for(let i=0;i<Math.min(3, pool.length);i++){ const idx = rng.int(pool.length); picks.push(pool.splice(idx,1)[0]); }
           if(!picks.length){
-            // 더 이상 선택 불가 → 모달 표시 없이 즉시 계속 진행
+            // 선택할 업그레이드가 없으면 모달만 닫고 즉시 이어서 진행
             try{ modal.remove(); }catch{}
             B.awaitingUpgrade=false; if(typeof B._awaitUpgradeResolve==='function'){ const fn=B._awaitUpgradeResolve; B._awaitUpgradeResolve=null; fn(); }
-            // 카드 갱신(Lv.Max 표기 반영)
-            renderBattleView(root, state);
-            // 전멸 상태면 즉시 종료
-            if(window.BATTLE.isBattleFinished(B)){ showResult(B.winner==='ally'); }
             return;
           }
           picks.forEach(up=>{
@@ -801,10 +797,7 @@ export function renderBattleView(root, state){
               sp.taken.push(up.id);
               modal.remove();
               B.awaitingUpgrade=false; if(typeof B._awaitUpgradeResolve==='function'){ const fn=B._awaitUpgradeResolve; B._awaitUpgradeResolve=null; fn(); }
-              // 카드 즉시 갱신을 위해 재렌더
-              renderBattleView(root, state);
-              // 업그레이드 선택 직후, 적 전멸이면 즉시 종료
-              if(window.BATTLE.isBattleFinished(B)){ showResult(B.winner==='ally'); }
+              // 전체 리렌더는 하지 않고, 이후 외부 흐름이 계속 진행되며 필요 시 갱신됨
             };
             list.appendChild(b);
           });
@@ -975,14 +968,22 @@ export function renderBattleView(root, state){
     window.BATTLE.performSkill(state, B, actor, useSkill);
     await new Promise(r=>setTimeout(r, 10));
     B.animating = true;
-    const animDelay = animateFromLog();
+    let animDelay = animateFromLog();
     await new Promise(r=>setTimeout(r, Math.max(200, animDelay||0)));
     await new Promise(r=>setTimeout(r, 500));
     document.querySelectorAll('.unit-slot .hit-badge').forEach(n=>n.remove());
     document.querySelectorAll('.unit-slot .hpbar .pred').forEach(p=>{ p.style.width='0%'; p.style.left='0%'; });
     B.animating = false;
-    // 업그레이드 대기 시, 사용자가 선택할 때까지 멈춤
-    if(B.awaitingUpgrade){ console.debug('[upgrade-wait] start after player turn'); await new Promise(r=>{ B._awaitUpgradeResolve = r; }); console.debug('[upgrade-wait] done after player turn'); }
+    // 업그레이드 대기 시, 사용자가 선택할 때까지 멈춘 뒤 남은 이벤트가 있으면 다시 연출
+    if(B.awaitingUpgrade){
+      await new Promise(r=>{ B._awaitUpgradeResolve = r; });
+      if((B.log||[]).length){
+        B.animating = true;
+        animDelay = animateFromLog();
+        await new Promise(r=>setTimeout(r, Math.max(250, animDelay||0)));
+        B.animating = false;
+      }
+    }
     // 다음 턴 시작 효과(중독/재생 등) 즉시 적용 및 연출
     if(B.turnUnit && B.turnStartProcessedFor !== B.turnUnit){
       window.BATTLE.applyTurnStartEffects(B);

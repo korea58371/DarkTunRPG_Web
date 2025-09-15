@@ -1,10 +1,10 @@
 export const UNITS = {
-  'C-001': { id:'C-001', name:'주인공', hp:55, hpMax:55, mp:30, spd:7, atk:18, def:4, shield:0, crit:0.185, dodge:0.05, block:0.165, position:{ row:2, col:0 }, skills:['SK-01','SK-MOVE-1'] },
+  'C-001': { id:'C-001', name:'주인공', hp:55, hpMax:55, mp:30, spd:7, atk:18, def:4, shield:0, crit:0.185, dodge:0.05, block:0.165, position:1, skills:['SK-01','SK-MOVE-1'] },
   'C-014': { id:'C-014', name:'궁수', hp:22, hpMax:22, mp:12, spd:6, atk:15, def:1, shield:0, crit:0.3, dodge:0.08, block:0.04, position:6, skills:['SK-02','SK-33','SK-12','SK-MOVE-1','SK-22'], deathLine:'크으... 여기까지인가.. 뒤는 부탁한다..', preferredRows:[3,2,1] },
-  'C-015': { id:'C-015', name:'헬레나(화염술사)', hp:24, hpMax:24, mp:20, spd:5, atk:6, mag:16, def:1, shield:0, crit:0.08, dodge:0.06, block:0.02, position:7, skills:['SK-FIREBALL','SK-FIRE-CROSS','SK-MOVE-1'], preferredRows:[3,2,1] },
-  'E-101': { id:'E-101', name:'해골 병사', hp:18, hpMax:18, mp:0, spd:5, atk:5, def:1, shield:0, crit:0.05, dodge:0.02, block:0.02, position:1, skills:['SK-10'], passives:['PS-BONE'], deathLine:'키에에...' },
-  'E-102': { id:'E-102', name:'해골 창병(중열)', hp:20, hpMax:20, mp:0, spd:5, atk:6, def:2, shield:0, crit:0.05, dodge:0.03, block:0.06, position:4, skills:['SK-10'], passives:['PS-BONE'], deathLine:'크어어..' },
-  'E-103': { id:'E-103', name:'해골 궁수(후열)', hp:16, hpMax:16, mp:0, spd:6, atk:5, def:1, shield:0, crit:0.08, dodge:0.05, block:0.01, position:7, skills:['SK-10'], passives:['PS-BONE'], deathLine:'키리릭..' },
+  'C-015': { id:'C-015', name:'헬레나', hp:24, hpMax:24, mp:20, spd:5, atk:6, mag:16, def:1, shield:0, crit:0.08, dodge:0.06, block:0.02, position:7, skills:['SK-FIREBALL','SK-FIRE-CROSS','SK-MOVE-1'], preferredRows:[3,2,1] },
+  'E-101': { id:'E-101', name:'해골 병사', hp:18, hpMax:18, mp:0, spd:5, atk:5, def:1, shield:0, crit:0.05, dodge:0.02, block:0.02, position:1, skills:['SK-10'], passives:['PS-BONE'], deathLine:'키에에...', sprite:{ base:'assets/mon/mon_001.png', attack:'assets/mon/mon_001_atk.png', hit:'assets/mon/mon_001_hit.png' } },
+  'E-102': { id:'E-102', name:'해골 창병', hp:20, hpMax:20, mp:0, spd:5, atk:6, def:2, shield:0, crit:0.05, dodge:0.03, block:0.06, position:4, skills:['SK-10'], passives:['PS-BONE'], deathLine:'크어어..' , sprite:{ base:'assets/mon/mon_002.png', attack:'assets/mon/mon_002_atk.png', hit:'assets/mon/mon_002_hit.png' } },
+  'E-103': { id:'E-103', name:'해골 궁수', hp:16, hpMax:16, mp:0, spd:6, atk:5, def:1, shield:0, crit:0.08, dodge:0.05, block:0.01, position:7, skills:['SK-10'], passives:['PS-BONE'], deathLine:'키리릭..' },
   'C-050': { id:'C-050', name:'세리아', hp:20, hpMax:20, mp:18, spd:5, atk:3, mag:12, def:1, shield:0, crit:0.05, dodge:0.06, block:0.02, position:5, skills:['SK-20','SK-21','SK-30'], preferredRows:[3,2,1] },
   'E-201': { id:'E-201', name:'거대 해골', hp:120, hpMax:120, mp:0, spd:4, atk:12, def:4, shield:0, crit:0.08, dodge:0.02, block:0.05, position:5, large:true, skills:['SK-10'] }
   ,

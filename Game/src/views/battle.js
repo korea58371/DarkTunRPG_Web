@@ -97,8 +97,8 @@ export function renderBattleView(root, state){
     const rows = document.createElement('div'); rows.className='rows';
     // 보드 전체를 약간 아래쪽으로 이동시켜 하단에 몰리게 함
     try{ rows.style.top = '300px'; }catch{}
-    // 세로 간격(행 간 y 간격) 축소
-    try{ rows.style.rowGap = '2px'; }catch{}
+    // 세로 간격(행 간 y 간격) 최소화(겹침 허용)
+    try{ rows.style.rowGap = '0px'; }catch{}
     // 원근감: row가 높을수록 세로 공간을 더 크게 배분
     try{
       const rowHeights = [0.8, 1.15, 1.3]; // 1열 < 2열 < 3열
@@ -107,7 +107,11 @@ export function renderBattleView(root, state){
 
     // UI index mapping: 레이아웃(CSS)에서 이미 아군 보드를 좌우 반전하고 있다면
     // 여기서는 추가 반전 없이 로컬 col을 그대로 사용한다.
-    const uiIndexFromCol=(sideName, col)=> Math.max(0, Math.min(2, col||0));
+    const uiIndexFromCol=(sideName, col)=>{
+      const c = Math.max(0, Math.min(2, col||0));
+      // 아군은 오른쪽(센터 쪽)으로 붙도록 열을 반전
+      return sideName==='ally' ? (2 - c) : c;
+    };
 
     // 3x3 고정 그리드를 유지하기 위해 각 row별 3칸 배열을 만든다.
     function toLine(rowNum){
@@ -122,9 +126,11 @@ export function renderBattleView(root, state){
     const orderRows = [1,2,3];
     orderRows.forEach(rowNum=>{
       const wrap = document.createElement('div'); wrap.className='row-wrap';
-      // 원근감: row가 높을수록 같은 열 간격을 넓게
+      // 클릭 누락 방지: 행 전체에 클릭 이벤트가 하위로 전달되도록 보장
+      try{ wrap.style.pointerEvents = 'auto'; }catch{}
+      // 원근감: row가 높을수록 같은 열 간격을 넓게(최소 겹침 허용을 위해 기본 gap은 좁게)
       try{
-        const baseGap=150, addPerRow=30;
+        const baseGap=20, addPerRow=24;
         wrap.style.columnGap = `${baseGap + (rowNum-1)*addPerRow}px`;
         // 열을 내용 너비로 만들고 가운데 정렬하여 gap이 실제 간격으로 작동하게 함
         wrap.style.gridTemplateColumns = 'repeat(3, max-content)';
@@ -133,11 +139,16 @@ export function renderBattleView(root, state){
       const line = toLine(rowNum); // [col0, col1, col2]
       line.forEach((id, colIndex)=>{
         const slot = document.createElement('div'); slot.className='slot';
-        // 원근감: col이 높을수록 약간의 좌측 마진으로 간격 확대
+        try{ slot.style.pointerEvents='auto'; }catch{}
+        // 슬롯 자체는 겹침 허용
+        try{ slot.style.overflow = 'visible'; }catch{}
+        // 원근감: col이 높을수록 약간의 좌측 마진으로 간격 확대(겹침 허용 → 값 축소)
         try{ const perCol = 8; slot.style.marginLeft = `${Math.max(0, colIndex)*perCol}px`; }catch{}
         if(id){
           const u = B.units[id];
           const el = document.createElement('div'); el.className='unit-slot'; if(u.large) el.classList.add('large'); el.dataset.unitId = id;
+          // 슬롯이 항상 클릭 가능하도록 최상위에 포인터 허용, 내부 장식은 none
+          try{ el.style.pointerEvents='auto'; }catch{}
           if(B.turnUnit===id) el.classList.add('is-turn');
           if(B.target===id) el.classList.add('is-target');
           // buff icons
@@ -150,13 +161,16 @@ export function renderBattleView(root, state){
             return buf.join('');
           })();
           el.innerHTML = `<div class=\"inner\"><div class=\"portrait\"></div><div class=\"hpbar\"><span style=\"width:${Math.max(0,(u.hp/u.hpMax)*100)}%\"></span><i class=\"pred\" style=\"width:0%\"></i></div><div class=\"shieldbar\" style=\"display:${(u.shield||0)>0?'block':'none'};\"><span style=\"width:${Math.max(0, Math.min(100, ((u.shield||0)/(u.hpMax||1))*100))}%\"></span></div></div><div class=\"slot-buffs\">${buffsHtml}</div><div class=\"name-label\">${u.name}</div>`;
+          // 초상 이미지: 리소스 적용 + 초기 스케일 고정(상태 전환에도 동일 비율 유지)
+          try{ const urls = getPortraitUrls(id); const p = el.querySelector('.portrait'); p.style.transformOrigin='center bottom'; p.style.transform='translate(-50%, 0) scale(1)'; safeSetBackgroundImage(p, urls.base, urls.base); }catch{}
           // 원근감: row가 높을수록 슬롯 사이즈 증가
           try{
             const inner = el.querySelector('.inner');
-            const baseScale = (u.large? 1.6 : 1);
-            const rowScale = 0.8 + (rowNum-1)*0.2; // 1.00, 1.12, 1.24
+            const baseScale = 1; // 크기 통일
+            const rowScale = 1;  // 행에 따른 크기 변화 없음
+            const imgScale = 1;  // 이미지 스케일 고정
             inner.style.transformOrigin = 'bottom center';
-            inner.style.transform = `scale(${Math.round(baseScale*rowScale*100)/100})`;
+            inner.style.transform = `scale(${Math.round(baseScale*rowScale*imgScale*100)/100})`;
           }catch{}
           el.onmouseenter=(e)=>{ window.UI_TIP?.showTooltip(`${u.name}\nHP ${u.hp}/${u.hpMax} · MP ${(u.mp||0)} · SPD ${u.spd}\nATK ${u.atk} · DEF ${u.def}`, e.clientX, e.clientY); };
           el.onmousemove=(e)=>{ window.UI_TIP?.positionTip(e.clientX, e.clientY); };
@@ -306,6 +320,41 @@ export function renderBattleView(root, state){
       return { lane: inEnemy? enemyLane : allyLane, el: found };
     }
     return { lane:null, el:null };
+  }
+
+  // 초상 이미지 조회: 우선 unit 데이터의 sprite 필드를 사용
+  const FALLBACK_SPRITE = { base: 'assets/mon/mon_001.png' };
+
+  function getPortraitUrls(unitId){
+    try{
+      const baseId = String(unitId||'').split('@')[0];
+      const unitDef = state.data?.units?.[baseId];
+      if(unitDef && unitDef.sprite){ return unitDef.sprite; }
+      const u = B.units[unitId];
+      if(u && u.sprite){ return u.sprite; }
+      return FALLBACK_SPRITE;
+    }catch{ return FALLBACK_SPRITE; }
+  }
+
+  function safeSetBackgroundImage(el, url, fallback){
+    try{
+      if(!el) return;
+      const img = new Image();
+      img.onload = ()=>{ try{ el.style.backgroundImage = `url('${url}')`; }catch{} };
+      img.onerror = ()=>{ try{ el.style.backgroundImage = `url('${fallback}')`; }catch{} };
+      img.src = url;
+    }catch{}
+  }
+
+  function applyPortraitState(unitId, mode){
+    try{
+      if(!unitId) return;
+      const { el } = getSlotByIdOrBase(unitId);
+      const p = el?.querySelector('.portrait'); if(!p) return;
+      const urls = getPortraitUrls(unitId);
+      const src = (mode==='attack')? (urls.attack||urls.base) : (mode==='hit')? (urls.hit||urls.base) : (urls.base);
+      safeSetBackgroundImage(p, src, urls.base);
+    }catch{}
   }
 
   function refreshCardStates(){
@@ -681,6 +730,8 @@ export function renderBattleView(root, state){
           window.UI_TIP?.showTooltip('한번 더 클릭 시 스킬 사용', x, y);
         }
       };
+      // 스프라이트가 클릭을 가로채지 않도록 포인터 이벤트 제거
+      try{ const p = el.querySelector('.portrait'); if(p) p.style.pointerEvents='none'; }catch{}
       el.onmouseenter=(e)=>{
         if(id && selectedSkill && B.target===id){
           window.UI_TIP?.showTooltip('한번 더 클릭 시 스킬 사용', e.clientX, e.clientY);
@@ -867,6 +918,8 @@ export function renderBattleView(root, state){
             slotEl.classList.add('impact'); setTimeout(()=>slotEl.classList.remove('impact'), 200);
             const bar = slotEl.querySelector('.hpbar > span'); if(bar && typeof ev.hp==='number'){ bar.style.width = `${Math.max(0,(ev.hp/(B.units[toId].hpMax||1))*100)}%`; } else { const u=B.units[toId]; if(bar){ bar.style.width = `${Math.max(0,(u.hp/u.hpMax)*100)}%`; } }
             const sbar = slotEl.querySelector('.shieldbar > span'); if(sbar){ const sv = (typeof ev.shield==='number')? ev.shield : (B.units[toId].shield||0); sbar.style.width = `${Math.max(0, Math.min(100, (sv/(B.units[toId].hpMax||1))*100))}%`; const barWrap = sbar.parentElement; if(barWrap){ barWrap.style.display = (sv>0)? 'block' : 'none'; } }
+            // 피격 스프라이트(고정 비율 유지)
+            try{ applyPortraitState(toId, 'hit'); setTimeout(()=> applyPortraitState(toId, 'default'), 240); }catch{}
             const dmg = document.createElement('div'); let cls='dmg-float'; let text=`-${ev.dmg}`; 
             if(ev.crit){ cls+=' dmg-crit'; text=`💥 ${ev.dmg}`; } 
             else if(ev.blocked){ cls+=' dmg-block'; text=`🛡️ ${ev.dmg}`; }
@@ -879,10 +932,7 @@ export function renderBattleView(root, state){
               if(line){ const sp=document.createElement('div'); sp.className='speech'; sp.textContent=line; slotEl.appendChild(sp); setTimeout(()=>{ if(sp.parentElement) sp.remove(); }, 1600); }
             }
           } else { console.warn('[anim-hit] slot not found', { toId, lane: B.enemyOrder.includes(toId)? 'enemy':'ally' }); }
-          const fromLane = (fromId && fromId.includes('@E')) ? enemyLane : allyLane;
-          fromLane.classList.add('hit-swing'); setTimeout(()=>fromLane.classList.remove('hit-swing'), 260);
-          const fromEl = fromLane.querySelector(`.unit-slot[data-unit-id="${fromId}"]`);
-          if(fromEl){ const cls = B.enemyOrder.includes(fromId)? 'lunge-enemy' : 'lunge-ally'; fromEl.classList.add(cls); setTimeout(()=>fromEl.classList.remove(cls), 220); }
+          // 슬롯/레인 이동 애니메이션 제거(스프라이트만 이동)
         } else if(ev.type==='dead'){
           const toId = ev.to;
           const wasEnemy = toId.includes('@E');
@@ -1082,18 +1132,36 @@ export function renderBattleView(root, state){
       B.target = window.BATTLE.pickTarget(state, B, false, foeSkill);
       document.querySelectorAll('.unit-slot.is-target').forEach(x=>x.classList.remove('is-target'));
       const foeEl = enemyLane.querySelector(`.unit-slot[data-unit-id="${B.turnUnit}"]`);
-      if(foeEl){ foeEl.classList.add('attacking'); }
+      if(foeEl){
+        foeEl.classList.add('attacking');
+        try{ applyPortraitState(B.turnUnit, 'attack'); }catch{}
+        // 슬롯 고정, 스프라이트만 앞으로 이동
+        try{
+          const sprite = foeEl.querySelector('.portrait');
+          if(sprite){
+            const dx = B.enemyOrder.includes(B.turnUnit)? -40 : 40;
+            const anim = sprite.animate([
+              { transform: 'translate(-50%, 0) scale(1)' },
+              { transform: `translate(calc(-50% + ${dx}px), 0) scale(1.05)` },
+              { transform: 'translate(-50%, 0) scale(1)' }
+            ], { duration: 260, easing:'ease-out' });
+            // 끝난 후 기본 이미지로 복귀를 재보장(이중 안전장치)
+            anim.addEventListener('finish', ()=>{ try{ applyPortraitState(B.turnUnit, 'default'); }catch{} });
+          }
+        }catch{}
+      }
       // 적 스킬 대사 표시
       const foeShout = foeSkill?.shout;
       if(foeEl && foeShout){ const sp=document.createElement('div'); sp.className='speech'; sp.textContent=foeShout; foeEl.appendChild(sp); setTimeout(()=>{ if(sp.parentElement) sp.remove(); }, 1800); }
       const tEl = (B.enemyOrder.includes(B.target)? enemyLane : allyLane).querySelector(`.unit-slot[data-unit-id="${B.target}"]`);
       if(tEl) tEl.classList.add('is-target');
       await new Promise(r=>setTimeout(r, 220));
+      // 다단히트(2회) 시에도 같은 모션이 반복되도록 performSkill 호출 전후로 이미지/이동 처리를 유지
       window.BATTLE.performSkill(state, B, foe, foeSkill);
       B.animating = true;
       const animDelay = animateFromLog();
       await new Promise(r=>setTimeout(r, Math.max(300, animDelay||0)));
-      if(foeEl){ foeEl.classList.remove('attacking'); }
+      if(foeEl){ foeEl.classList.remove('attacking'); try{ applyPortraitState(B.turnUnit, 'default'); }catch{} }
       await new Promise(r=>setTimeout(r, 500));
       B.animating = false;
       // 적 턴에도 업그레이드가 발생하면 대기

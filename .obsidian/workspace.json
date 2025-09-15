@@ -41,12 +41,12 @@
             "state": {
               "type": "markdown",
               "state": {
-                "file": "GDD/시스템/[SYS] 타일 이동 시스템.md",
+                "file": "GDD/시스템/[SYS] 전투 - 연출 시스템.md",
                 "mode": "source",
                 "source": false
               },
               "icon": "lucide-file",
-              "title": "[SYS] 타일 이동 시스템"
+              "title": "[SYS] 전투 - 연출 시스템"
             }
           },
           {
@@ -254,8 +254,13 @@
       "bases:새 베이스 생성하기": false
     }
   },
-  "active": "a14d4f686b457cdd",
+  "active": "5dc42f359032ee67",
   "lastOpenFiles": [
+    "Game/assets/mon/mon_002.png",
+    "GDD/시스템/[SYS] 타일 이동 시스템.md",
+    "Game/assets/mon/mon_001_atk.png",
+    "Game/assets/mon/mon_001_Attack.png",
+    "Game/assets/mon/ps8D4B.tmp",
     "Game/assets/mon/mon_001.png",
     "Game/assets/mon",
     "Game/assets/새 폴더",
@@ -269,12 +274,10 @@
     "Game/assets/bg/ps2A67.tmp",
     "Game/assets/bg/BG_001.png",
     "Game/assets/bg",
-    "Game/assets",
     "Game/src/assets/bg/BG_001.png",
     "Game/src/assets/bg/Background/BG_001.png",
     "Game/src/assets/Image/Background/BG_001.png",
     "Game/src/Resources/Image/Background/BG_001.png",
-    "Game/src/Resources/Image/Background/Generated Image September 15, 2025 - 5_22PM.png",
     "GDD/시스템/[SYS] 상태 지속.md",
     "GDD/시스템/[SYS] 전투 - 데이터와 수치.md",
     "GDD/시스템/[SYS] 전투 - 개요.md",
@@ -283,7 +286,6 @@
     "GDD/UX/[UX] 루트 선택 UI.md",
     "GDD/콘텐츠/[CNT] 에피소드 타일.md",
     "GDD/시스템/[SYS] 턴제 전투 시스템.md",
-    "GDD/시스템/[SYS] 타일 이동 시스템.md",
     "GDD/시스템/[SYS] 전투 - UI.md",
     "GDD/시스템/[SYS] 전투 - 턴과 행동.md",
     "GDD/시스템/[SYS] 전투 - 타겟팅과 범위.md",
@@ -298,9 +300,7 @@
     "아이디어.md",
     "직업-아이디어.md",
     "스킬 종류.md",
-    "UI_스토리분기.png",
     "무제.md",
-    "상태이상.md",
-    "Pasted image 20250908223604.png"
+    "상태이상.md"
   ]
 }

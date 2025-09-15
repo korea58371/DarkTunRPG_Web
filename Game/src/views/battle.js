@@ -104,13 +104,12 @@ export function renderBattleView(root, state){
       const rowHeights = [0.8, 1.15, 1.3]; // 1열 < 2열 < 3열
       rows.style.gridTemplateRows = rowHeights.map(v=> `${v}fr`).join(' ');
     }catch{}
+    // 시각만 대칭: transform 사용하지 않음 (이동/타겟 로직 영향 방지)
 
-    // UI index mapping: 레이아웃(CSS)에서 이미 아군 보드를 좌우 반전하고 있다면
-    // 여기서는 추가 반전 없이 로컬 col을 그대로 사용한다.
+    // UI index mapping: 추가 반전 없이 col 그대로 사용
     const uiIndexFromCol=(sideName, col)=>{
       const c = Math.max(0, Math.min(2, col||0));
-      // 아군은 오른쪽(센터 쪽)으로 붙도록 열을 반전
-      return sideName==='ally' ? (2 - c) : c;
+      return c;
     };
 
     // 3x3 고정 그리드를 유지하기 위해 각 row별 3칸 배열을 만든다.
@@ -119,6 +118,7 @@ export function renderBattleView(root, state){
       ids.forEach(id=>{
         if(!id) return; const u=B.units[id]; if(!u) return;
         if((u.row||2)!==rowNum) return; const idx = uiIndexFromCol(side, (u.col ?? 0));
+        console.log(`[toLine] ${side} ${id}: u.col=${u.col} → idx=${idx}`);
         line[idx] = id;
       });
       return line;
@@ -127,28 +127,36 @@ export function renderBattleView(root, state){
     orderRows.forEach(rowNum=>{
       const wrap = document.createElement('div'); wrap.className='row-wrap';
       try{ wrap.style.position='relative'; wrap.style.zIndex = String(10 + (rowNum||1)); wrap.style.pointerEvents='auto'; }catch{}
-      // 클릭 누락 방지: 행 전체에 클릭 이벤트가 하위로 전달되도록 보장
       try{ wrap.style.pointerEvents = 'auto'; }catch{}
+      try{ wrap.style.display = 'grid'; }catch{}
+      // 행 박스를 내용 너비로 축소하고, 행 자체를 좌/우로 정렬
+      try{ wrap.style.width='fit-content'; wrap.style.justifySelf = (side==='ally') ? 'end' : 'start'; }catch{}
       // 원근감: row가 높을수록 같은 열 간격을 넓게(최소 겹침 허용을 위해 기본 gap은 좁게)
       try{
         const baseGap=20, addPerRow=24;
         wrap.style.columnGap = `${baseGap + (rowNum-1)*addPerRow}px`;
-        // 열을 내용 너비로 만들고 가운데 정렬하여 gap이 실제 간격으로 작동하게 함
+        // 열을 내용 너비로 만들고 gap이 실제 간격으로 작동하게 함
         wrap.style.gridTemplateColumns = 'repeat(3, max-content)';
-        wrap.style.justifyContent = 'left';
+        // wrap.style.justifyContent 는 사용하지 않음 (행 박스 자체를 이동)
       }catch{}
       const line = toLine(rowNum); // [col0, col1, col2]
-      line.forEach((id, colIndex)=>{
+      const colOrder = (side==='ally') ? [2,1,0] : [0,1,2];
+      colOrder.forEach((colIndex)=>{
+        const id = line[colIndex];
         const slot = document.createElement('div'); slot.className='slot';
         try{ slot.style.pointerEvents='auto'; }catch{}
-        // 슬롯 자체는 겹침 허용
         try{ slot.style.overflow = 'visible'; }catch{}
-        // 원근감: col이 높을수록 약간의 좌측 마진으로 간격 확대(겹침 허용 → 값 축소)
-        try{ const perCol = 8; slot.style.marginLeft = `${Math.max(0, colIndex)*perCol}px`; }catch{}
+        // 열 위치를 명시적으로 고정(아군은 2,1,0이 오른→중→왼 순서가 되도록)
+        try{
+          const gridCol = (side==='ally') ? (3 - colIndex) : (colIndex + 1);
+          slot.style.gridColumnStart = String(gridCol);
+          // 대칭을 위해 per-col 마진은 제거 (간격은 columnGap으로만 처리)
+          slot.style.marginLeft = '0px';
+          slot.style.marginRight = '0px';
+        }catch{}
         if(id){
           const u = B.units[id];
           const el = document.createElement('div'); el.className='unit-slot'; if(u.large) el.classList.add('large'); el.dataset.unitId = id;
-          // 슬롯이 항상 클릭 가능하도록 최상위에 포인터 허용, 내부 장식은 none
           try{ el.style.pointerEvents='auto'; }catch{}
           if(B.turnUnit===id) el.classList.add('is-turn');
           if(B.target===id) el.classList.add('is-target');
@@ -164,7 +172,7 @@ export function renderBattleView(root, state){
           el.innerHTML = `<div class=\"inner\"><div class=\"portrait\"></div><div class=\"hpbar\"><span style=\"width:${Math.max(0,(u.hp/u.hpMax)*100)}%\"></span><i class=\"pred\" style=\"width:0%\"></i></div><div class=\"shieldbar\" style=\"display:${(u.shield||0)>0?'block':'none'};\"><span style=\"width:${Math.max(0, Math.min(100, ((u.shield||0)/(u.hpMax||1))*100))}%\"></span></div><div class=\"name-label\">${u.name}</div></div><div class=\"slot-buffs\">${buffsHtml}</div><div class=\"hitbox\" style=\"position:absolute; inset:0; z-index:10;\"></div>`;
           // 초상 이미지: 리소스 적용 + 초기 스케일 고정(상태 전환에도 동일 비율 유지)
           try{ const urls = getPortraitUrls(id); const p = el.querySelector('.portrait'); p.style.transformOrigin='center bottom'; p.style.transform='translate(-50%, 0) scale(1)'; safeSetBackgroundImage(p, urls.base, urls.base); }catch{}
-          // 원근감: row가 높을수록 슬롯 사이즈 증가
+          // 원근감: row가 높을수록 슬롯 사이즈 증가 (아군/적군 동일)
           try{
             const inner = el.querySelector('.inner');
             const baseScale = 1.5; // 기본 크기 1.5배
@@ -173,6 +181,7 @@ export function renderBattleView(root, state){
             const imgScale = unitScale;  // 유닛별 보정
             inner.style.transformOrigin = 'bottom center';
             inner.style.transform = `scale(${Math.round(baseScale*rowScale*imgScale*100)/100})`;
+            console.log(`[scale-debug] ${side} ${id} row${rowNum}: baseScale=${baseScale} × rowScale=${rowScale} × imgScale=${imgScale} = ${Math.round(baseScale*rowScale*imgScale*100)/100}`);
           }catch{}
           el.onmouseenter=(e)=>{ window.UI_TIP?.showTooltip(`${u.name}\nHP ${u.hp}/${u.hpMax} · MP ${(u.mp||0)} · SPD ${u.spd}\nATK ${u.atk} · DEF ${u.def}`, e.clientX, e.clientY); };
           el.onmousemove=(e)=>{ window.UI_TIP?.positionTip(e.clientX, e.clientY); };
@@ -817,72 +826,126 @@ export function renderBattleView(root, state){
     });
   }
 
-  // 능동 이동 스킬 목적지 선택 모드
+  // 능동 이동 스킬 목적지 선택 모드 (완전 재설계)
   function enterMoveTargeting(){
     const sk = selectedSkill; if(!sk || sk.type!=='move') return;
-    // 시작 전에 기존 오버레이 정리
     if(cleanupMoveOverlay){ try{ cleanupMoveOverlay(); }catch{} cleanupMoveOverlay=null; }
-    // 클릭 가이드를 아군/적군 양쪽 격자에 표시: 배우가 이동 가능한 칸만 활성화
+    
     const actorId = B.turnUnit; const actorU = B.units[actorId];
-    const cand = [];
-    const dirs = Array.isArray(sk.move?.allowedDirs) && sk.move.allowedDirs.length ? sk.move.allowedDirs : ['forward','back','up','down','upLeft','upRight','downLeft','downRight'];
-    dirs.forEach(d=>{
-      const pv = window.BATTLE.previewMove(state, B, actorId, { ...(sk.move||{}), who:'actor', dir: d });
-      if(pv.steps>0 && pv.final){ cand.push(pv.final); }
+    if(!actorU) return;
+    
+    // 현재 위치에서 8방향으로 이동 가능한 위치 계산
+    const currentRow = actorU.row || 1;
+    const currentCol = actorU.col || 0;
+    const directions = [
+      {dr: -1, dc: -1, name: 'upLeft'},    {dr: -1, dc: 0, name: 'up'},      {dr: -1, dc: 1, name: 'upRight'},
+      {dr: 0,  dc: -1, name: 'left'},                                        {dr: 0,  dc: 1, name: 'right'},
+      {dr: 1,  dc: -1, name: 'downLeft'},  {dr: 1,  dc: 0, name: 'down'},    {dr: 1,  dc: 1, name: 'downRight'}
+    ];
+    
+    const candidates = [];
+    directions.forEach(dir => {
+      const newRow = currentRow + dir.dr;
+      const newCol = currentCol + dir.dc;
+      // 경계 체크
+      if(newRow < 1 || newRow > 3 || newCol < 0 || newCol > 2) return;
+      // 점유 체크 (같은 진영 내에서)
+      const occupied = B.allyOrder.some(id => {
+        if(!id || id === actorId) return false;
+        const u = B.units[id];
+        return u && u.hp > 0 && u.row === newRow && u.col === newCol;
+      });
+      if(!occupied) {
+        candidates.push({ row: newRow, col: newCol, direction: dir.name });
+      }
     });
-    // 중복 좌표 제거
-    const key = (p)=> `${p.row}:${p.col}`; const uniq = Array.from(new Map(cand.map(p=>[key(p), p])).values());
-    if(!uniq.length){ window.UI_TIP?.showTooltip('이동 가능한 칸이 없습니다', (cardsEl.getBoundingClientRect().left+24), (cardsEl.getBoundingClientRect().top-8)); return; }
-    // 오버레이 표시
-    function mark(tile){
-      const lane = allyLane; // 배우는 아군이므로 아군 레인
-      // grid에서 해당 row/col에 있는 유닛 슬롯 요소를 찾아야 함: 현재 그리드는 row-wrap(행)/slot(열) 순으로 고정 3x3
-      const rowIndex = Math.max(0, Math.min(2, (tile.row||1) - 1)); // 행: 1,2,3 → 0,1,2
-      // 열: 레이아웃이 반전 처리하므로 로컬 col을 그대로 사용
-      const colIndex = Math.max(0, Math.min(2, (tile.col||0)));
-      const rowWrap = lane.querySelectorAll('.row-wrap')[rowIndex];
-      if(!rowWrap) return null;
-      const slot = rowWrap.querySelectorAll('.slot')[colIndex];
-      if(!slot) return null;
-      // 고스트 .unit-slot을 후보 표시용으로 활성화(슬롯 크기 대신 유닛 슬롯 크기로 딱 맞춤)
-      let ghost = slot.querySelector('.unit-slot');
-      if(!ghost){ ghost = document.createElement('div'); ghost.className='unit-slot'; slot.appendChild(ghost); }
-      ghost.style.opacity = '1';
-      ghost.classList.add('move-candidate-ghost');
-      ghost.dataset.row = String(tile.row);
-      ghost.dataset.col = String(tile.col);
-      return ghost;
+    
+    if(!candidates.length) {
+      window.UI_TIP?.showTooltip('이동 가능한 칸이 없습니다', (cardsEl.getBoundingClientRect().left+24), (cardsEl.getBoundingClientRect().top-8));
+      return;
     }
-    const marked = uniq.map(mark).filter(Boolean);
-    if(!marked.length){ window.UI_TIP?.showTooltip('이동 가능한 칸이 없습니다', (cardsEl.getBoundingClientRect().left+24), (cardsEl.getBoundingClientRect().top-8)); return; }
-    // 클릭 핸들러: 목적지 확정 → 스킬 즉시 실행
-    function onClickCandidate(e){
-      e.stopPropagation();
-      // 클릭된 후보의 목적지 좌표를 dataset에서 복원
-      const el = e.currentTarget; const row = Number(el.dataset.row); const col = Number(el.dataset.col);
-      const dest = { row, col };
-      window.UI_TIP?.hideTooltip();
-      // 선택된 이동 목적지를 반영한 임시 스킬로 실행(정확 좌표 지정)
-      const temp = { ...sk, move: { ...(sk.move||{}), who:'actor', tiles:1, required:true, __dest: dest } };
-      // previewMove는 dir 기반이므로, 정확 매칭이 필요하다면 dir을 dest 기준으로 산출하는 로직이 필요함.
-      // 현재는 previewMove를 다시 호출하지 않고, 엔진에서 실제 이동을 계산하므로 dir은 그대로 사용
-      B.target = B.turnUnit;
-      executeSelectedSkill(temp);
-      cleanup();
-    }
-    // 클릭 바인딩(표시 시점에 dataset 이미 주입됨)
-    marked.forEach(el=>{ el.style.cursor='pointer'; el.addEventListener('click', onClickCandidate, { once:true }); });
-    window.UI_TIP?.showTooltip('이동할 위치를 선택하세요', (cardsEl.getBoundingClientRect().left+24), (cardsEl.getBoundingClientRect().top-8));
+    
+    // 각 이동 후보 위치에 해당하는 실제 슬롯(또는 빈 공간)을 찾아서 오버레이 생성
+    const overlays = [];
+    candidates.forEach(cand => {
+      // 해당 좌표에 실제 슬롯이 있는지 확인
+      let targetSlot = null;
+      
+      // 1) 해당 위치에 다른 아군이 있는지 확인
+      const existingUnit = B.allyOrder.find(id => {
+        if(!id || id === actorId) return false;
+        const u = B.units[id];
+        return u && u.row === cand.row && u.col === cand.col;
+      });
+      
+      if(existingUnit) {
+        // 기존 유닛이 있으면 그 슬롯 사용
+        targetSlot = allyLane.querySelector(`.unit-slot[data-unit-id="${existingUnit}"]`);
+      } else {
+        // 빈 공간이면 해당 row/col에 해당하는 위치를 계산
+        // 아군 렌더링 구조: row-wrap[rowIndex] > slot[colOrder에 따른 순서]
+        const rowIndex = cand.row - 1; // 1,2,3 → 0,1,2
+        const rowWrap = allyLane.querySelectorAll('.row-wrap')[rowIndex];
+        if(rowWrap) {
+          // 아군은 열 순서가 2,1,0이므로 col을 이 순서로 매핑
+          const colOrder = [2,1,0];
+          const slotIndex = colOrder.indexOf(cand.col);
+          if(slotIndex >= 0) {
+            const slot = rowWrap.children[slotIndex];
+            if(slot) {
+              targetSlot = slot.querySelector('.unit-slot') || slot;
+            }
+          }
+        }
+      }
+      
+      if(!targetSlot) {
+        console.warn(`[move-overlay] Cannot find target slot for (${cand.row},${cand.col})`);
+        return;
+      }
+      
+      // 실제 슬롯 위치를 기준으로 오버레이 생성
+      const targetRect = targetSlot.getBoundingClientRect();
+      const overlay = document.createElement('div');
+      overlay.className = 'move-candidate-overlay';
+      overlay.style.position = 'absolute';
+      overlay.style.pointerEvents = 'auto';
+      overlay.style.cursor = 'pointer';
+      overlay.style.border = '3px dashed #4a90e2';
+      overlay.style.borderRadius = '12px';
+      overlay.style.background = 'rgba(74, 144, 226, 0.25)';
+      overlay.style.zIndex = '1000';
+      overlay.dataset.row = String(cand.row);
+      overlay.dataset.col = String(cand.col);
+      
+      // 실제 슬롯과 정확히 동일한 위치와 크기
+      overlay.style.left = targetRect.left + 'px';
+      overlay.style.top = targetRect.top + 'px';
+      overlay.style.width = targetRect.width + 'px';
+      overlay.style.height = targetRect.height + 'px';
+      
+      // 클릭 핸들러
+      overlay.addEventListener('click', (e) => {
+        e.stopPropagation();
+        const row = Number(e.currentTarget.dataset.row);
+        const col = Number(e.currentTarget.dataset.col);
+        window.UI_TIP?.hideTooltip();
+        
+        const temp = { ...sk, move: { who:'actor', tiles:1, required:true, __dest: { row, col } } };
+        B.target = B.turnUnit;
+        executeSelectedSkill(temp);
+        cleanup();
+      });
+      
+      document.body.appendChild(overlay);
+      overlays.push(overlay);
+      console.log(`[move-overlay] (${cand.row},${cand.col}) positioned at ${overlay.style.left},${overlay.style.top} (${targetRect.width}x${targetRect.height})`);
+    });
+    
+    window.UI_TIP?.showTooltip(`이동 가능한 위치: ${candidates.length}개`, (cardsEl.getBoundingClientRect().left+24), (cardsEl.getBoundingClientRect().top-8));
+    
     function cleanup(){
-      try{
-        marked.forEach(el=>{
-          el.classList.remove('move-candidate');
-          el.classList.remove('move-candidate-ghost');
-          // 유닛이 아닌 임시 고스트라면 제거
-          if(!el.dataset.unitId){ try{ el.remove(); }catch{} }
-        });
-        document.querySelectorAll('.slot.move-candidate').forEach(n=> n.classList.remove('move-candidate'));
-      }catch{}
+      overlays.forEach(el => { try{ el.remove(); }catch{} });
       window.UI_TIP?.hideTooltip();
     }
     cleanupMoveOverlay = cleanup;

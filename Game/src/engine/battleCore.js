@@ -19,16 +19,19 @@ export function createBattleState(state, battle){
         const c = Number.isInteger(posOverride.col)? posOverride.col : 0;
         row = Math.min(3, Math.max(1, r));
         col = Math.min(2, Math.max(0, c));
+        console.log(`[ally-object-pos] ${baseId}: posOverride=${JSON.stringify(posOverride)} → row=${row}, col=${col}`);
       } else {
-        // 2) numeric legacy form (1..9) → row/col 파생
+        // 2) numeric legacy form (1..9) → row/col 파생 (아군은 열을 반전하여 내부 col=0이 전열이 되도록)
         const preferred = Number.isInteger(base?.row) ? base.row : rowFromLegacy;
         row = Math.min(3, Math.max(1, preferred || (Math.floor(idx/3)+1)));
         if(typeof legacyPos==='number'){
           const visualCol = ((Math.max(1, Math.min(9, legacyPos)) - 1) % 3);
-          col = Math.min(2, Math.max(0, 2 - visualCol)); // 로컬: 전열=0, 중열=1, 후열=2
+          col = Math.min(2, Math.max(0, visualCol)); // 전열=0, 중열=1, 후열=2 (반전 제거)
+          console.log(`[ally-numeric-pos] ${baseId}: legacyPos=${legacyPos}, visualCol=${visualCol} → row=${row}, col=${col}`);
         } else {
           // 기본 인덱스 기반 배치도 로컬 전열=0을 유지(가운데=1, 후열=2)
           col = Math.min(2, Math.max(0, (idx%3)));
+          console.log(`[ally-default-pos] ${baseId}: idx=${idx} → row=${row}, col=${col}`);
         }
       }
     } else {
@@ -81,16 +84,20 @@ export function createBattleState(state, battle){
     const tryPlace = (row, col)=>{ if(!occAlly[row][col]){ occAlly[row][col]=id; u.row=row; u.col=col; return true; } return false; };
     let row = Math.min(3, Math.max(1, u.row||2));
     let col = (typeof u.col==='number' && u.col>=0 && u.col<=2) ? u.col : 0;
+    console.log(`[before-placement] ${id}: trying row=${row}, col=${col}`);
     if(!tryPlace(row, col)){
+      console.log(`[placement-conflict] ${id}: (${row},${col}) occupied, searching alternatives`);
       // try other columns in same row first
       let placed=false;
-      for(let c=0;c<3;c++){ if(tryPlace(row, c)){ placed=true; break; } }
+      for(let c=0;c<3;c++){ if(tryPlace(row, c)){ console.log(`[placement-resolved] ${id}: placed at (${row},${c})`); placed=true; break; } }
       if(!placed){
         for(let step=1; step<=2 && !placed; step++){
           const nr = ((row-1+step)%3)+1;
-          for(let c=0;c<3;c++){ if(tryPlace(nr, c)){ placed=true; break; } }
+          for(let c=0;c<3;c++){ if(tryPlace(nr, c)){ console.log(`[placement-resolved] ${id}: placed at (${nr},${c})`); placed=true; break; } }
         }
       }
+    } else {
+      console.log(`[placement-ok] ${id}: placed at (${row},${col})`);
     }
   });
   // 영구 사망(회차 내) 처리: state.ownedUnits에 없는 아군은 제외
@@ -143,6 +150,21 @@ export function createBattleState(state, battle){
       if(i>0){ queue.splice(i,1); queue.unshift(fastestAlly); }
     }
   }
+  // 안전장치: party.positions의 객체형 {row,col} 오버라이드를 마지막에 한 번 더 강제 적용
+  try{
+    const pos = state.party?.positions || {};
+    allyOrder.forEach(id=>{
+      const base = id && id.split('@')[0];
+      const o = pos[base];
+      if(o && typeof o==='object'){
+        const u = units[id]; if(!u) return;
+        const oldRow = u.row, oldCol = u.col;
+        if(Number.isInteger(o.row)) u.row = Math.min(3, Math.max(1, o.row));
+        if(Number.isInteger(o.col)) u.col = Math.min(2, Math.max(0, o.col));
+        console.log(`[final-override] ${base}@${id}: ${oldRow},${oldCol} → ${u.row},${u.col} (from ${JSON.stringify(o)})`);
+      }
+    });
+  }catch{}
   const turnUnit = queue[0];
   const rng = (state.rng && typeof state.rng.next==='function') ? state.rng : { next: Math.random, int:(n)=> Math.floor(Math.random()*n) };
   return { allyOrder, enemyOrder, queue, turnUnit, target:null, units, winner:null, rng, log: [], id: battle?.id, battle, partySnapshot: (state.party.members||[]).slice(), positionsSnapshot: { ...(state.party.positions||{}) }, turn: 1, turnStartProcessedFor: null, lastTarget: {}, deadAllies: [] };
@@ -238,21 +260,24 @@ export function pickTarget(state, battleState, isAlly, sk){
   if(sk?.range==='melee'){
     const alive = pool.filter(id=> id && (battleState.units[id]?.hp>0));
     if(!alive.length) return null;
-    let cols = alive.map(id=> battleState.units[id]?.col ?? 999);
-    if(!isAlly){ cols = cols.map(c=> 2 - c); } // 적 관점: 아군 col 반전
-    const minCol = Math.min(...cols);
+    
+    // 전열 = col이 가장 작은 값 (0이 전열, 2가 후열)
+    const minCol = Math.min(...alive.map(id=> battleState.units[id]?.col ?? 999));
+    console.log(`[melee-targeting] ${isAlly ? 'ally' : 'enemy'} targeting: minCol=${minCol}, alive cols=[${alive.map(id=> `${id}:${battleState.units[id]?.col}`).join(',')}]`);
     
     // 플레이어가 선택한 타겟이 최전열(minCol)에 있으면 그 타겟을 그대로 사용
     if(battleState.target && pool.includes(battleState.target)){
       const tCol = battleState.units[battleState.target]?.col;
-      const adjustedTCol = isAlly ? tCol : (2 - tCol);
-      if(adjustedTCol===minCol) return battleState.target;
+      if(tCol === minCol) return battleState.target;
     }
-    const frontCol = alive.filter((id,i)=> (isAlly ? battleState.units[id]?.col : (2 - battleState.units[id]?.col)) === minCol);
+    
+    // 최전열(minCol)에 있는 모든 유닛 중에서 선택
+    const frontCol = alive.filter(id => battleState.units[id]?.col === minCol);
     // tie-breaker: smallest row first
     frontCol.sort((a,b)=> (battleState.units[a]?.row||9) - (battleState.units[b]?.row||9));
     const selected = frontCol[0] || null;
     
+    console.log(`[melee-targeting] selected: ${selected} (col=${battleState.units[selected]?.col}, row=${battleState.units[selected]?.row})`);
     return selected;
   }
   // ranged: any alive enemy
@@ -265,19 +290,22 @@ export function pickTarget(state, battleState, isAlly, sk){
   if(!sk?.range && (sk?.type==='strike' || !sk?.type)){
     const alive = pool.filter(id=> id && (battleState.units[id]?.hp>0));
     if(!alive.length) return null;
-    let cols = alive.map(id=> battleState.units[id]?.col ?? 999);
-    if(!isAlly){ cols = cols.map(c=> 2 - c); }
-    const minCol = Math.min(...cols);
+    
+    // 전열 = col이 가장 작은 값 (0이 전열, 2가 후열)
+    const minCol = Math.min(...alive.map(id=> battleState.units[id]?.col ?? 999));
+    console.log(`[default-targeting] ${isAlly ? 'ally' : 'enemy'} targeting: minCol=${minCol}, alive cols=[${alive.map(id=> `${id}:${battleState.units[id]?.col}`).join(',')}]`);
     
     if(battleState.target && pool.includes(battleState.target)){
       const tCol = battleState.units[battleState.target]?.col;
-      const adjustedTCol = isAlly ? tCol : (2 - tCol);
-      if(adjustedTCol===minCol) return battleState.target;
+      if(tCol === minCol) return battleState.target;
     }
-    const frontCol = alive.filter((id,i)=> (isAlly ? battleState.units[id]?.col : (2 - battleState.units[id]?.col)) === minCol);
+    
+    // 최전열(minCol)에 있는 모든 유닛 중에서 선택
+    const frontCol = alive.filter(id => battleState.units[id]?.col === minCol);
     frontCol.sort((a,b)=> (battleState.units[a]?.row||9) - (battleState.units[b]?.row||9));
     const selected = frontCol[0] || null;
     
+    console.log(`[default-targeting] selected: ${selected} (col=${battleState.units[selected]?.col}, row=${battleState.units[selected]?.row})`);
     return selected;
   }
   // fallback: previous behavior

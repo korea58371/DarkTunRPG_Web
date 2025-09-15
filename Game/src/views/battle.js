@@ -19,6 +19,29 @@ export function renderBattleView(root, state){
     </div>
   `;
 
+  // 전투 배경 이미지 적용(battles.js 의 bg 필드)
+  (function applyBattleBackground(){
+    try{
+      const center = frame.querySelector('.battle-center');
+      const raw = bt?.bg || 'BG_001.png';
+      const path = (typeof raw==='string')
+        ? (raw.includes('/') ? raw : `assets/bg/${raw}`)
+        : (raw?.path || 'assets/bg/BG_001.png');
+      center.style.backgroundImage = `url('${path}')`;
+      center.style.backgroundSize = 'cover';
+      center.style.backgroundPosition = 'center';
+      center.style.backgroundRepeat = 'no-repeat';
+      center.style.position = 'relative';
+      center.style.overflow = 'hidden';
+      // 전투 영역 세로 공간 확보(1920x1080 기준, 상단/하단 UI 제외)
+      center.style.minHeight = '680px';
+      center.style.display = 'grid';
+      center.style.gridTemplateColumns = '1fr 1fr';
+      center.style.alignItems = 'stretch';
+      center.style.justifyItems = 'stretch';
+    }catch{}
+  })();
+
   // 초기 전투 상태 준비 (파티 변경 시 재생성)
   // 기존: party/positions 스냅샷 비교로 중간에 캐시를 삭제했음 → 전투 중 사망 처리로 party가 바뀌면 적이 부활하는 문제 유발
   // 수정: battle id가 바뀔 때만 새로 생성
@@ -138,6 +161,13 @@ export function renderBattleView(root, state){
 
   const allyLane = frame.querySelector('#allyLane'); allyLane.className='lane ally';
   const enemyLane = frame.querySelector('#enemyLane'); enemyLane.className='lane enemy';
+  // 배경 노출을 위해 레인 배경 투명화 + 레인이 전체 높이를 사용하도록 함
+  try{ 
+    allyLane.style.background = 'transparent'; 
+    enemyLane.style.background = 'transparent'; 
+    allyLane.style.height = '100%';
+    enemyLane.style.height = '100%';
+  }catch{}
   renderRows(allyLane, B.allyOrder, 'ally');
   renderRows(enemyLane, B.enemyOrder, 'enemy');
   // redraw remembered target highlight if valid

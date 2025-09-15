@@ -15,7 +15,8 @@ export const BATTLES = {
     ],
     "seed": 0,
     "winNext": "R-101",
-    "loseNext": ""
+    "loseNext": "",
+    "bg": "BG_002.png",
   },
   "BT-200": {
     "id": "BT-200",
@@ -48,7 +49,8 @@ export const BATTLES = {
     ],
     "seed": 67890,
     "winNext": "EP-300",
-    "loseNext": "EP-205"
+    "loseNext": "EP-205",
+    "bg": "BG_001.png"
   },
   "BT-400": {
     "id": "BT-400",
@@ -56,6 +58,7 @@ export const BATTLES = {
       "E-201"
     ],
     "seed": 98765,
-    "winNext": "EP-900"
+    "winNext": "EP-900",
+    "bg": "BG_001.png"
   }
 };

@@ -126,7 +126,7 @@ export function renderBattleView(root, state){
     const orderRows = [1,2,3];
     orderRows.forEach(rowNum=>{
       const wrap = document.createElement('div'); wrap.className='row-wrap';
-      try{ wrap.style.position='relative'; wrap.style.zIndex = String(100 + (3 - (rowNum||1))); }catch{}
+      try{ wrap.style.position='relative'; wrap.style.zIndex = String(10 + (rowNum||1)); wrap.style.pointerEvents='auto'; }catch{}
       // 클릭 누락 방지: 행 전체에 클릭 이벤트가 하위로 전달되도록 보장
       try{ wrap.style.pointerEvents = 'auto'; }catch{}
       // 원근감: row가 높을수록 같은 열 간격을 넓게(최소 겹침 허용을 위해 기본 gap은 좁게)
@@ -194,11 +194,11 @@ export function renderBattleView(root, state){
     try{
       laneEl.addEventListener('click', (e)=>{
         const t=e.target; const rect=t?.getBoundingClientRect?.()||{};
-        console.debug('[lane-click-capture]', { side, tag:t?.tagName, cls:t?.className, x:e.clientX, y:e.clientY, tRect:{x:rect.left,y:rect.top,w:rect.width,h:rect.height} });
+        console.log('[lane-click-capture]', { side, tag:t?.tagName, cls:t?.className, x:e.clientX, y:e.clientY, tRect:{x:rect.left,y:rect.top,w:rect.width,h:rect.height} });
       }, true);
       laneEl.addEventListener('click', (e)=>{
         const t=e.target; const rect=t?.getBoundingClientRect?.()||{};
-        console.debug('[lane-click-bubble]', { side, tag:t?.tagName, cls:t?.className, x:e.clientX, y:e.clientY, tRect:{x:rect.left,y:rect.top,w:rect.width,h:rect.height} });
+        console.log('[lane-click-bubble]', { side, tag:t?.tagName, cls:t?.className, x:e.clientX, y:e.clientY, tRect:{x:rect.left,y:rect.top,w:rect.width,h:rect.height} });
       }, false);
     }catch{}
   };
@@ -358,7 +358,7 @@ export function renderBattleView(root, state){
       const src = (mode==='attack')? (urls.attack||urls.base) : (mode==='hit')? (urls.hit||urls.base) : (urls.base);
       try{
         const prev = (p.style.backgroundImage||'').replace(/^url\("?|"?\)$/g,'');
-        console.debug('[sprite]', { unitId, mode, prev, next: src, lane: (B.enemyOrder.includes(unitId)? 'enemy':'ally') });
+        console.log('[sprite]', { unitId, mode, prev, next: src, lane: (B.enemyOrder.includes(unitId)? 'enemy':'ally') });
         p.dataset.spriteMode = mode||'default';
       }catch{}
       safeSetBackgroundImage(p, src, urls.base);
@@ -744,7 +744,7 @@ export function renderBattleView(root, state){
         const already = (B.target===id);
         try{
           const rect = el.getBoundingClientRect();
-          console.debug('[click-hitbox]', {
+          console.log('[click-hitbox]', {
             id,
             side,
             row: B.units[id]?.row,
@@ -768,8 +768,18 @@ export function renderBattleView(root, state){
           window.UI_TIP?.showTooltip('한번 더 클릭 시 스킬 사용', x, y);
         }
       };
-      if(hit){ hit.addEventListener('click', onSelect, { capture:true }); }
-      else { el.addEventListener('click', onSelect, { capture:true }); }
+      // 바인딩: 버블 단계(click) + 추가 진단(pointerdown)
+      if(hit){
+        hit.addEventListener('pointerdown', (e)=>{
+          try{ const r=el.getBoundingClientRect(); console.log('[hitbox-pointerdown]', { id, side, x:e.clientX, y:e.clientY, rect:{x:r.left,y:r.top,w:r.width,h:r.height} }); }catch{}
+        }, { capture:false });
+        hit.addEventListener('click', onSelect, { capture:false });
+      } else {
+        el.addEventListener('pointerdown', (e)=>{
+          try{ const r=el.getBoundingClientRect(); console.log('[slot-pointerdown]', { id, side, x:e.clientX, y:e.clientY, rect:{x:r.left,y:r.top,w:r.width,h:r.height} }); }catch{}
+        }, { capture:false });
+        el.addEventListener('click', onSelect, { capture:false });
+      }
       // 스프라이트가 클릭을 가로채지 않도록 포인터 이벤트 제거
       try{ const p = el.querySelector('.portrait'); if(p) p.style.pointerEvents='none'; }catch{}
       el.onmouseenter=(e)=>{

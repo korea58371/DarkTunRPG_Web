@@ -256,6 +256,7 @@
   },
   "active": "5dc42f359032ee67",
   "lastOpenFiles": [
+    "Game/assets/mon/mon_003.png",
     "Game/assets/mon/mon_002.png",
     "GDD/시스템/[SYS] 타일 이동 시스템.md",
     "Game/assets/mon/mon_001_atk.png",
@@ -277,7 +278,6 @@
     "Game/src/assets/bg/BG_001.png",
     "Game/src/assets/bg/Background/BG_001.png",
     "Game/src/assets/Image/Background/BG_001.png",
-    "Game/src/Resources/Image/Background/BG_001.png",
     "GDD/시스템/[SYS] 상태 지속.md",
     "GDD/시스템/[SYS] 전투 - 데이터와 수치.md",
     "GDD/시스템/[SYS] 전투 - 개요.md",

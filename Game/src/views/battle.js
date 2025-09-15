@@ -126,6 +126,7 @@ export function renderBattleView(root, state){
     const orderRows = [1,2,3];
     orderRows.forEach(rowNum=>{
       const wrap = document.createElement('div'); wrap.className='row-wrap';
+      try{ wrap.style.position='relative'; wrap.style.zIndex = String(100 + (3 - (rowNum||1))); }catch{}
       // 클릭 누락 방지: 행 전체에 클릭 이벤트가 하위로 전달되도록 보장
       try{ wrap.style.pointerEvents = 'auto'; }catch{}
       // 원근감: row가 높을수록 같은 열 간격을 넓게(최소 겹침 허용을 위해 기본 gap은 좁게)
@@ -177,28 +178,7 @@ export function renderBattleView(root, state){
           el.onmouseleave=()=> window.UI_TIP?.hideTooltip();
           // 클릭은 enableSelect()에서 hitbox에만 바인딩한다.
           slot.appendChild(el);
-          // 클릭은 hitbox에만 바인딩하여 겹치는 스프라이트 영향 제거
-          const hit = el.querySelector('.hitbox');
-          if(hit){
-            hit.addEventListener('click', async (ev)=>{
-              ev.stopPropagation();
-              const rect = el.getBoundingClientRect();
-              try{
-                console.debug('[click-hitbox]', { id, side, row:u.row, col:u.col, client:{x:ev.clientX,y:ev.clientY}, rect:{x:rect.left,y:rect.top,w:rect.width,h:rect.height} });
-              }catch{}
-              if(B.turnUnit !== actor.id) return;
-              const already = (B.target===id);
-              B.target=id; selectedTarget=id;
-              document.querySelectorAll('.unit-slot.is-target').forEach(x=>x.classList.remove('is-target'));
-              el.classList.add('is-target');
-              refreshCardStates();
-              updateAOEHighlight();
-              updateTargetHints();
-              if(already && selectedSkill && canExecute(selectedSkill, id)){
-                await executeSelectedSkill();
-              }
-            }, { capture:false });
-          }
+          // 클릭 핸들러는 enableSelect()에서 일괄 바인딩
         } else {
           // 투명한 빈 슬롯을 추가하여 레이아웃 고정
           const ghost = document.createElement('div'); ghost.className='unit-slot ghost';
@@ -216,6 +196,10 @@ export function renderBattleView(root, state){
         const t=e.target; const rect=t?.getBoundingClientRect?.()||{};
         console.debug('[lane-click-capture]', { side, tag:t?.tagName, cls:t?.className, x:e.clientX, y:e.clientY, tRect:{x:rect.left,y:rect.top,w:rect.width,h:rect.height} });
       }, true);
+      laneEl.addEventListener('click', (e)=>{
+        const t=e.target; const rect=t?.getBoundingClientRect?.()||{};
+        console.debug('[lane-click-bubble]', { side, tag:t?.tagName, cls:t?.className, x:e.clientX, y:e.clientY, tRect:{x:rect.left,y:rect.top,w:rect.width,h:rect.height} });
+      }, false);
     }catch{}
   };
 
@@ -747,22 +731,26 @@ export function renderBattleView(root, state){
   function enableSelect(laneEl, side){
     laneEl.querySelectorAll('.unit-slot').forEach((el)=>{
       const id = el.dataset.unitId;
-      el.onclick = async (ev)=>{
+      // 부모 클릭은 제거하고, hitbox에만 바인딩
+      el.onclick = null;
+      const hit = el.querySelector('.hitbox');
+      if(hit){ try{ hit.style.pointerEvents='auto'; hit.style.zIndex='9999'; }catch{} }
+      const onSelect = async (ev)=>{
         if(!id) return;
         if(B.turnUnit !== actor.id) return;
+        ev.stopPropagation();
         // 슬롯 클릭 시 남아있는 이동 오버레이 정리
         if(cleanupMoveOverlay){ try{ cleanupMoveOverlay(); }catch{} cleanupMoveOverlay=null; }
         const already = (B.target===id);
         try{
           const rect = el.getBoundingClientRect();
-          console.debug('[click-slot]', {
+          console.debug('[click-hitbox]', {
             id,
             side,
             row: B.units[id]?.row,
             col: B.units[id]?.col,
             client: { x: ev.clientX, y: ev.clientY },
-            rect: { x: rect.left, y: rect.top, w: rect.width, h: rect.height },
-            path: (ev.composedPath && ev.composedPath().map(n=> n.className||n.tagName).slice(0,6)) || []
+            rect: { x: rect.left, y: rect.top, w: rect.width, h: rect.height }
           });
         }catch{}
         B.target=id; selectedTarget=id;
@@ -780,6 +768,8 @@ export function renderBattleView(root, state){
           window.UI_TIP?.showTooltip('한번 더 클릭 시 스킬 사용', x, y);
         }
       };
+      if(hit){ hit.addEventListener('click', onSelect, { capture:true }); }
+      else { el.addEventListener('click', onSelect, { capture:true }); }
       // 스프라이트가 클릭을 가로채지 않도록 포인터 이벤트 제거
       try{ const p = el.querySelector('.portrait'); if(p) p.style.pointerEvents='none'; }catch{}
       el.onmouseenter=(e)=>{

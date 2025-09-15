@@ -571,7 +571,13 @@ export function performSkill(state, battleState, actor, sk){
     maybeMoveActorBefore();
     // Column-wide skill (vertical line through rows). Determine column from selected target.
     const col = battleState.units[targetId]?.col ?? 0;
-    const targets = pool.filter(id=>id && (battleState.units[id]?.col===col) && (battleState.units[id]?.hp>0));
+    let targets = pool.filter(id=>id && (battleState.units[id]?.col===col) && (battleState.units[id]?.hp>0));
+    // melee range 시 최전열 col만 허용 + 해당 col의 모든 row 타격 (but only if col===minCol)
+    if(sk.range==='melee'){
+      const alive = pool.filter(id=> id && (battleState.units[id]?.hp>0));
+      const minCol = alive.length ? Math.min(...alive.map(id=> battleState.units[id]?.col ?? 999)) : null;
+      if(minCol != null && col !== minCol){ targets = []; } // invalid col → no targets
+    }
     targets.forEach(tid=>{
       const tUnit = battleState.units[tid];
       let died=false; let moved=false;

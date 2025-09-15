@@ -161,7 +161,7 @@ export function renderBattleView(root, state){
             if(u._burn && u._burn.remain>0){ buf.push(`<div class=\"slot-buff burn\" title=\"화상\"><span>🔥</span><span class=\"turns\">${u._burn.remain}</span></div>`); }
             return buf.join('');
           })();
-          el.innerHTML = `<div class=\"inner\"><div class=\"portrait\"></div><div class=\"hpbar\"><span style=\"width:${Math.max(0,(u.hp/u.hpMax)*100)}%\"></span><i class=\"pred\" style=\"width:0%\"></i></div><div class=\"shieldbar\" style=\"display:${(u.shield||0)>0?'block':'none'};\"><span style=\"width:${Math.max(0, Math.min(100, ((u.shield||0)/(u.hpMax||1))*100))}%\"></span></div></div><div class=\"slot-buffs\">${buffsHtml}</div><div class=\"name-label\">${u.name}</div><div class=\"hitbox\" style=\"position:absolute; inset:0; z-index:10;\"></div>`;
+          el.innerHTML = `<div class=\"inner\"><div class=\"portrait\"></div><div class=\"hpbar\"><span style=\"width:${Math.max(0,(u.hp/u.hpMax)*100)}%\"></span><i class=\"pred\" style=\"width:0%\"></i></div><div class=\"shieldbar\" style=\"display:${(u.shield||0)>0?'block':'none'};\"><span style=\"width:${Math.max(0, Math.min(100, ((u.shield||0)/(u.hpMax||1))*100))}%\"></span></div><div class=\"name-label\">${u.name}</div></div><div class=\"slot-buffs\">${buffsHtml}</div><div class=\"hitbox\" style=\"position:absolute; inset:0; z-index:10;\"></div>`;
           // 초상 이미지: 리소스 적용 + 초기 스케일 고정(상태 전환에도 동일 비율 유지)
           try{ const urls = getPortraitUrls(id); const p = el.querySelector('.portrait'); p.style.transformOrigin='center bottom'; p.style.transform='translate(-50%, 0) scale(1)'; safeSetBackgroundImage(p, urls.base, urls.base); }catch{}
           // 원근감: row가 높을수록 슬롯 사이즈 증가
@@ -169,7 +169,8 @@ export function renderBattleView(root, state){
             const inner = el.querySelector('.inner');
             const baseScale = 1.5; // 기본 크기 1.5배
             const rowScale = Math.pow(1.2, Math.max(0, (rowNum||1) - 1)); // row가 커질수록 1.2배씩 증가
-            const imgScale = 1;  // 이미지 스케일 고정
+            const unitScale = Number(B.units[id]?.spriteScale || 1);
+            const imgScale = unitScale;  // 유닛별 보정
             inner.style.transformOrigin = 'bottom center';
             inner.style.transform = `scale(${Math.round(baseScale*rowScale*imgScale*100)/100})`;
           }catch{}
@@ -310,16 +311,30 @@ export function renderBattleView(root, state){
   }
 
   function getSlotByIdOrBase(targetId){
-    // 우선 정확 ID 검색
-    let lane = B.enemyOrder.includes(targetId)? enemyLane : (B.allyOrder.includes(targetId)? allyLane : null);
-    let el = lane? lane.querySelector(`.unit-slot[data-unit-id="${targetId}"]`) : null;
+    // 우선 ID 패턴으로 lane 결정 (order 변경 후에도 안정적)
+    let lane = null;
+    if((targetId || '').includes('@E')) lane = enemyLane;
+    else if((targetId || '').includes('@A')) lane = allyLane;
+    let el = lane ? lane.querySelector(`.unit-slot[data-unit-id="${targetId}"]`) : null;
     if(el) return { lane, el };
+    // 실패 시 로그 (디버그)
+    console.warn('[slot-lookup-fail]', { targetId, lane: lane?.className });
     // 베이스ID로 보정 검색
     const base = (targetId||'').split('@')[0];
+    // 1) 최근 지정한 대상 매핑이 있으면 우선 사용
+    try{
+      if(B._lastTargetByBase && B._lastTargetByBase[base]){
+        const prefId = B._lastTargetByBase[base];
+        const prefLane = (prefId.includes('@E')) ? enemyLane : ((prefId.includes('@A')) ? allyLane : null);
+        const prefEl = prefLane?.querySelector(`.unit-slot[data-unit-id="${prefId}"]`);
+        if(prefEl) return { lane: prefLane, el: prefEl };
+      }
+    }catch{}
+    // 2) DOM 상 존재하는 동일 베이스 중 첫 번째
     const all = Array.from(document.querySelectorAll('.unit-slot'));
     const found = all.find(n => (n.dataset?.unitId||'').startsWith(base+'@'));
     if(found){
-      const inEnemy = B.enemyOrder.includes(found.dataset.unitId);
+      const inEnemy = found.dataset.unitId.includes('@E');
       return { lane: inEnemy? enemyLane : allyLane, el: found };
     }
     return { lane:null, el:null };
@@ -683,6 +698,12 @@ export function renderBattleView(root, state){
           return;
         }
         if(already && canExecute(selectedSkill, selectedTarget || B.target)){
+          // 안전장치: 현재 하이라이트 대상이 있다면 그것을 엔진으로 전달
+          const tgt = selectedTarget || B.target;
+          if(tgt){
+            B.target = tgt;
+            try{ const base=(tgt||'').split('@')[0]; B._lastTargetByBase = B._lastTargetByBase || {}; B._lastTargetByBase[base]=tgt; }catch{}
+          }
           await executeSelectedSkill();
         } else {
           // 선택 직후 즉시 힌트 툴팁 노출
@@ -754,12 +775,16 @@ export function renderBattleView(root, state){
           });
         }catch{}
         B.target=id; selectedTarget=id;
+        try{ const base=(id||'').split('@')[0]; B._lastTargetByBase = B._lastTargetByBase || {}; B._lastTargetByBase[base]=id; }catch{}
         document.querySelectorAll('.unit-slot.is-target').forEach(x=>x.classList.remove('is-target'));
         el.classList.add('is-target');
         refreshCardStates();
         updateAOEHighlight();
         updateTargetHints();
         if(already && selectedSkill && canExecute(selectedSkill, id)){
+          // 안전장치: 실행 직전에 현재 하이라이트된 대상을 B.target에 반영
+          B.target = id; selectedTarget = id;
+          try{ const base=(id||'').split('@')[0]; B._lastTargetByBase = B._lastTargetByBase || {}; B._lastTargetByBase[base]=id; }catch{}
           await executeSelectedSkill();
         } else if(selectedSkill){
           const rect = el.getBoundingClientRect();

@@ -158,6 +158,7 @@ export const EPISODES = {
         "items": [
           {
             "label": "세리아가 합류한다",
+            "next": "R-400",
             "effects": [
               {
                 "type": "party.add",
@@ -167,9 +168,12 @@ export const EPISODES = {
                 "type": "flag.set",
                 "key": "ep.EP-300.seriaJoin",
                 "value": true
+              },
+              {
+                "type": "party.add",
+                "unit": "C-015"
               }
-            ],
-            "next": "R-400"
+            ]
           }
         ]
       }

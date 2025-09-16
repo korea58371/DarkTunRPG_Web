@@ -5,22 +5,22 @@ export const BATTLES = {
       {
         "unit": "E-101",
         "row": 1,
-        "col": 1
+        "col": 0
       },
       {
         "unit": "E-101",
         "row": 2,
-        "col": 1
+        "col": 0
       },
       {
         "unit": "E-102",
         "row": 2,
-        "col": 2
+        "col": 1
       },
       {
         "unit": "E-101",
         "row": 3,
-        "col": 1
+        "col": 0
       }
     ],
     "seed": 0,

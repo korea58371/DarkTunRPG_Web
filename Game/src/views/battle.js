@@ -129,8 +129,24 @@ export function renderBattleView(root, state){
       try{ wrap.style.position='relative'; wrap.style.zIndex = String(10 + (rowNum||1)); wrap.style.pointerEvents='auto'; }catch{}
       try{ wrap.style.pointerEvents = 'auto'; }catch{}
       try{ wrap.style.display = 'grid'; }catch{}
-      // 행 박스를 내용 너비로 축소하고, 행 자체를 좌/우로 정렬
-      try{ wrap.style.width='fit-content'; wrap.style.justifySelf = (side==='ally') ? 'end' : 'start'; }catch{}
+      // 행 박스를 내용 너비로 축소하고, 행 자체를 좌/우로 정렬 + row별 오프셋
+      try{ 
+        wrap.style.width='fit-content'; 
+        
+        // row별 원근감 오프셋 계산
+        const baseOffset = 0;
+        const rowOffset = (rowNum - 1) * 40; // row가 높을수록 40px씩 더 밀림
+        
+        if(side === 'ally') {
+          wrap.style.justifySelf = 'end';
+          wrap.style.marginRight = `${baseOffset + rowOffset}px`;
+          wrap.style.marginLeft = '0px';
+        } else {
+          wrap.style.justifySelf = 'start';
+          wrap.style.marginLeft = `${baseOffset + rowOffset}px`;
+          wrap.style.marginRight = '0px';
+        }
+      }catch{}
       // 원근감: row가 높을수록 같은 열 간격을 넓게(최소 겹침 허용을 위해 기본 gap은 좁게)
       try{
         const baseGap=20, addPerRow=24;

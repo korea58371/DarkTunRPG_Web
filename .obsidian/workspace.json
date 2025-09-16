@@ -256,6 +256,7 @@
   },
   "active": "5dc42f359032ee67",
   "lastOpenFiles": [
+    "Game/assets/bg/story/BG_001.png",
     "Game/src/data/explorations.js.crswap",
     "Game/src/data/battles.js.crswap",
     "Game/src/data/episodes.js.crswap",
@@ -271,7 +272,6 @@
     "Game/assets/mon/cha_001_atk.png",
     "Game/assets/mon/mon_001_hit.png",
     "Game/assets/mon/cha_003.png",
-    "Game/src/data/battles.js.1.crswap",
     "Game/assets/mon/cha_002.png",
     "Game/assets/mon/cha_001.png",
     "Game/assets/mon/cha_0001.png",

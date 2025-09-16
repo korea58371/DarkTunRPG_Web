@@ -3,7 +3,7 @@ export const EXPLORATIONS = {
     "id": "EXPLO-001",
     "title": "낯선 장소",
     "description": "기억을 잃고 깨어난 이곳... 주변을 탐색해서 단서를 찾아보자.",
-    "background": "assets/bg/BG_001.png",
+    "background": "assets/bg/story/BG_001.png",
     "objects": [
       {
         "id": "strange_sound",

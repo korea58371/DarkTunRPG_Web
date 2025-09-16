@@ -784,8 +784,28 @@ export async function renderEpisodeVN(root, state, epId, userCfg){
   }
 
   async function run(){
-    for(let i=0;i<events.length;i++){
-      const ev = events[i]; if(!ev || !ev.cmd) continue; if(!evalWhen(ev.when, state)) continue; const fn=handlers[ev.cmd]; if(typeof fn==='function'){ /* eslint-disable no-await-in-loop */ await fn(ev, i); /* eslint-enable */ }
+    // 현재 이벤트 인덱스 복원 (저장된 상태가 있으면)
+    let startIndex = 0;
+    if (state.ui?.episodeProgress?.[epId]?.eventIndex !== undefined) {
+      startIndex = state.ui.episodeProgress[epId].eventIndex;
+      console.log(`[EPISODE] 이벤트 인덱스 복원: ${startIndex}`);
+    }
+    
+    for(let i=startIndex;i<events.length;i++){
+      const ev = events[i]; if(!ev || !ev.cmd) continue; if(!evalWhen(ev.when, state)) continue; 
+      
+      // 현재 이벤트 인덱스 저장
+      state.ui = state.ui || {};
+      state.ui.episodeProgress = state.ui.episodeProgress || {};
+      state.ui.episodeProgress[epId] = { eventIndex: i };
+      
+      const fn=handlers[ev.cmd]; if(typeof fn==='function'){ /* eslint-disable no-await-in-loop */ await fn(ev, i); /* eslint-enable */ }
+    }
+    
+    // 에피소드 완료 시 진행 상태 초기화
+    if (state.ui?.episodeProgress?.[epId]) {
+      delete state.ui.episodeProgress[epId];
+      console.log(`[EPISODE] 에피소드 ${epId} 완료, 진행 상태 초기화`);
     }
   }
 

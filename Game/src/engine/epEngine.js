@@ -14,7 +14,9 @@ export const EP_DEFAULT_CFG = {
   typing: { speed: 24, skippable: true },
   easing: 'ease',
   // overall screen scale multiplier; 1 = fit to viewport
-  scale: 1
+  scale: 1,
+  // 개발 중 이미지 캐시 무효화 (이미지 변경 시 즉시 반영)
+  bustImageCache: true
 };
 
 // All episodes are now in DSL format
@@ -70,10 +72,108 @@ function injectStylesOnce(){
 const _imgCache = new Map();
 const _audioCache = new Map();
 
-function loadImage(url){
-  if(_imgCache.has(url)) return _imgCache.get(url);
-  const p = new Promise((res, rej)=>{ const img=new Image(); img.onload=()=>res(img); img.onerror=rej; img.src=url; });
-  _imgCache.set(url, p); return p;
+function loadImage(url, bustCache = false){
+  const cacheKey = bustCache ? `${url}?v=${Date.now()}&r=${Math.random()}` : url;
+  
+  // 캐시 버스팅이 활성화되면 내부 캐시도 무시
+  if(bustCache) {
+    _imgCache.delete(url);
+  }
+  
+  if(!bustCache && _imgCache.has(url)) return _imgCache.get(url);
+  
+  const p = new Promise((res, rej)=>{
+    const img=new Image();
+    
+    // 브라우저 캐시 완전 무효화
+    if(bustCache) {
+      img.crossOrigin = 'anonymous';
+      // 강제 리로드를 위한 추가 헤더 설정 시도
+      try {
+        const xhr = new XMLHttpRequest();
+        xhr.open('GET', cacheKey, true);
+        xhr.responseType = 'blob';
+        xhr.onload = () => {
+          if(xhr.status === 200) {
+            const blob = xhr.response;
+            const objectURL = URL.createObjectURL(blob);
+            img.onload = () => {
+              URL.revokeObjectURL(objectURL);
+              res(img);
+            };
+            img.onerror = () => {
+              URL.revokeObjectURL(objectURL);
+              rej(new Error('Image load failed'));
+            };
+            img.src = objectURL;
+          } else {
+            // 폴백: 직접 로드
+            img.onload = () => res(img);
+            img.onerror = rej;
+            img.src = cacheKey;
+          }
+        };
+        xhr.onerror = () => {
+          // 폴백: 직접 로드
+          img.onload = () => res(img);
+          img.onerror = rej;
+          img.src = cacheKey;
+        };
+        xhr.send();
+      } catch(e) {
+        // 폴백: 직접 로드
+        img.onload = () => res(img);
+        img.onerror = rej;
+        img.src = cacheKey;
+      }
+    } else {
+      img.onload = () => res(img);
+      img.onerror = rej;
+      img.src = cacheKey;
+    }
+  });
+  
+  _imgCache.set(url, p); 
+  return p;
+}
+
+// 이미지 캐시 클리어 함수
+function clearImageCache(){
+  _imgCache.clear();
+  _audioCache.clear();
+  console.log('이미지 및 오디오 캐시가 클리어되었습니다.');
+}
+
+// 강제 새로고침 함수
+function forceReloadImages(){
+  // 모든 img 태그의 src를 캐시 버스팅으로 업데이트
+  document.querySelectorAll('.ep-vn img').forEach(img => {
+    const originalSrc = img.src.split('?')[0]; // 쿼리 파라미터 제거
+    img.src = `${originalSrc}?v=${Date.now()}&r=${Math.random()}`;
+  });
+  
+  // 배경 이미지도 업데이트
+  document.querySelectorAll('.ep-vn .layer-bg, .ep-vn .layer-bg > div').forEach(el => {
+    const bgImage = el.style.backgroundImage;
+    if(bgImage && bgImage.includes('url(')) {
+      const urlMatch = bgImage.match(/url\(['"]?([^'"]+)['"]?\)/);
+      if(urlMatch) {
+        const originalUrl = urlMatch[1].split('?')[0];
+        el.style.backgroundImage = `url('${originalUrl}?v=${Date.now()}&r=${Math.random()}')`;
+      }
+    }
+  });
+  
+  console.log('모든 이미지가 강제로 새로고침되었습니다.');
+}
+
+// 전역에서 접근 가능하도록 설정
+if(typeof window !== 'undefined') {
+  window.clearEpisodeImageCache = clearImageCache;
+  window.forceReloadEpisodeImages = forceReloadImages;
+  
+  // 개발 편의를 위한 단축키
+  window.reloadImages = forceReloadImages;
 }
 function getAudio(url){
   if(_audioCache.has(url)) return _audioCache.get(url);
@@ -311,17 +411,19 @@ export async function renderEpisodeVN(root, state, epId, userCfg){
     async bg(ev){ 
       if(!ev.name) return; 
       const url=pathForBg(cfg, ev.name); 
-      try{ await loadImage(url); }catch{} 
+      try{ await loadImage(url, cfg.bustImageCache); }catch{} 
+      
+      const finalUrl = cfg.bustImageCache ? `${url}?t=${Date.now()}` : url;
       
       // 스킵 중이면 즉시 배경 변경
       if(skipState.skipToChoice) {
-        bg.style.backgroundImage = `url('${url}')`;
+        bg.style.backgroundImage = `url('${finalUrl}')`;
         return;
       }
       
       // 페이드 효과와 함께 배경 변경
       const newBg = document.createElement('div');
-      newBg.style.cssText = `position:absolute; inset:0; background-image:url('${url}'); background-size:cover; background-position:center; opacity:0; transition:opacity ${ev.dur||500}ms ease;`;
+      newBg.style.cssText = `position:absolute; inset:0; background-image:url('${finalUrl}'); background-size:cover; background-position:center; opacity:0; transition:opacity ${ev.dur||500}ms ease;`;
       bg.appendChild(newBg);
       // 애니메이션 시작
       setTimeout(() => { newBg.style.opacity = '1'; }, 10);
@@ -340,7 +442,8 @@ export async function renderEpisodeVN(root, state, epId, userCfg){
       
       // 캐릭터 이미지 경로 설정 (story 폴더 지원)
       const charPath = id.includes('/') ? pathForChar(cfg, id) : pathForChar(cfg, id, a.emotion);
-      a.el.src = charPath;
+      const finalPath = cfg.bustImageCache ? `${charPath}?t=${Date.now()}` : charPath;
+      a.el.src = finalPath;
       
       // 위치 설정 (side, pos, offset 지원)
       if(ev.side){ 
@@ -459,7 +562,7 @@ export async function renderEpisodeVN(root, state, epId, userCfg){
     async popup(ev){
       if(!ev.name) return;
       const url = pathForPopup(cfg, ev.name);
-      try{ await loadImage(url); }catch{}
+      try{ await loadImage(url, cfg.bustImageCache); }catch{}
       
       // 기존 팝업 제거
       if(currentPopup){
@@ -469,7 +572,8 @@ export async function renderEpisodeVN(root, state, epId, userCfg){
       
       const img = document.createElement('img');
       img.className = 'popup-img';
-      img.src = url;
+      const finalUrl = cfg.bustImageCache ? `${url}?t=${Date.now()}` : url;
+      img.src = finalUrl;
       
       // 크기 및 위치 설정
       if(ev.size){
@@ -516,12 +620,12 @@ export async function renderEpisodeVN(root, state, epId, userCfg){
   async function preload(){
     try{
       const imgs=[]; (ep.events||[]).forEach(ev=>{
-        if(ev.cmd==='bg' && ev.name){ imgs.push(loadImage(pathForBg(cfg, ev.name))); }
+        if(ev.cmd==='bg' && ev.name){ imgs.push(loadImage(pathForBg(cfg, ev.name), cfg.bustImageCache)); }
         if(ev.cmd==='show' && ev.id){ 
           const charPath = ev.id.includes('/') ? pathForChar(cfg, ev.id) : pathForChar(cfg, ev.id, ev.emotion||'default');
-          imgs.push(loadImage(charPath)); 
+          imgs.push(loadImage(charPath, cfg.bustImageCache)); 
         }
-        if(ev.cmd==='popup' && ev.name){ imgs.push(loadImage(pathForPopup(cfg, ev.name))); }
+        if(ev.cmd==='popup' && ev.name){ imgs.push(loadImage(pathForPopup(cfg, ev.name), cfg.bustImageCache)); }
       }); await Promise.all(imgs);
     }catch{}
   }

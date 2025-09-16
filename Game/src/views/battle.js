@@ -175,7 +175,7 @@ export function renderBattleView(root, state){
           // 원근감: row가 높을수록 슬롯 사이즈 증가 (아군/적군 동일)
           try{
             const inner = el.querySelector('.inner');
-            const baseScale = 1.5; // 기본 크기 1.5배
+            const baseScale = 2.5; // 기본 크기 2.5배
             const rowScale = Math.pow(1.2, Math.max(0, (rowNum||1) - 1)); // row가 커질수록 1.2배씩 증가
             const unitScale = Number(B.units[id]?.spriteScale || 1);
             const imgScale = unitScale;  // 유닛별 보정

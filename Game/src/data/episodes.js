@@ -71,8 +71,13 @@ export const EPISODES = {
         "items": [
           {
             "label": "게임 오버",
-            "effects": [],
-            "next": "R-001"
+            "effects": [
+              {
+                "type": "gameover.trigger",
+                "reason": "heroic_sacrifice"
+              }
+            ],
+            "next": "GAMEOVER"
           }
         ]
       }
@@ -367,6 +372,123 @@ export const EPISODES = {
               }
             ],
             "next": "END-01"
+          }
+        ]
+      }
+    ]
+  },
+  "EP-GAMEOVER": {
+    "events": [
+      {
+        "cmd": "bg",
+        "name": "BG_001",
+        "dur": 1000
+      },
+      {
+        "cmd": "say",
+        "speaker": "나레이션",
+        "text": "..."
+      },
+      {
+        "cmd": "say",
+        "speaker": "나레이션",
+        "text": "당신의 여정이 여기서 끝났습니다."
+      },
+      {
+        "cmd": "say",
+        "speaker": "나레이션",
+        "text": "하지만 포기하지 마세요. 다시 도전할 수 있습니다."
+      },
+      {
+        "cmd": "choice",
+        "items": [
+          {
+            "label": "타이틀로 돌아가기",
+            "next": "GAMEOVER",
+            "effects": [
+              {
+                "type": "gameover.reset",
+                "resetType": "full"
+              }
+            ]
+          }
+        ]
+      }
+    ]
+  },
+  "EP-DEFEAT-BT100": {
+    "events": [
+      {
+        "cmd": "say",
+        "speaker": "나레이션",
+        "text": "해골 병사의 검이 주인공의 가슴을 관통했다."
+      },
+      {
+        "cmd": "say",
+        "speaker": "주인공",
+        "text": "이런... 여기서... 끝인가..."
+      },
+      {
+        "cmd": "say",
+        "speaker": "나레이션",
+        "text": "주인공의 의식이 서서히 흐려져갔다."
+      },
+      {
+        "cmd": "say",
+        "speaker": "나레이션",
+        "text": "첫 번째 시련에서 쓰러진 주인공... 그의 모험은 여기서 끝났다."
+      },
+      {
+        "cmd": "choice",
+        "items": [
+          {
+            "label": "Bad Ending: 첫 시련의 끝",
+            "next": "GAMEOVER",
+            "effects": [
+              {
+                "type": "gameover.trigger",
+                "reason": "first_trial_death"
+              }
+            ]
+          }
+        ]
+      }
+    ]
+  },
+  "EP-DEFEAT-BT400": {
+    "events": [
+      {
+        "cmd": "say",
+        "speaker": "나레이션",
+        "text": "거대한 해골 보스의 일격이 주인공을 쓰러뜨렸다."
+      },
+      {
+        "cmd": "say",
+        "speaker": "주인공",
+        "text": "이렇게... 끝나는 건가..."
+      },
+      {
+        "cmd": "say",
+        "speaker": "나레이션",
+        "text": "동료들의 절망적인 외침이 들려왔지만, 주인공은 더 이상 일어날 수 없었다."
+      },
+      {
+        "cmd": "say",
+        "speaker": "나레이션",
+        "text": "최종 보스 앞에서 쓰러진 주인공... 그들의 여정은 비극으로 끝났다."
+      },
+      {
+        "cmd": "choice",
+        "items": [
+          {
+            "label": "Bad Ending: 미완의 여정",
+            "next": "GAMEOVER",
+            "effects": [
+              {
+                "type": "gameover.trigger",
+                "reason": "final_boss_death"
+              }
+            ]
           }
         ]
       }

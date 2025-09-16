@@ -1213,6 +1213,28 @@ export async function renderBattleView(root, state, skipLoading = false){
           const lane = wasEnemy ? enemyLane : allyLane;
           const slotEl = lane.querySelector(`.unit-slot[data-unit-id="${toId}"]`);
           console.debug?.('[death]', { toId, wasEnemy, lane: lane?.className, slotEl: !!slotEl, when: scheduleAt });
+          
+          // 주인공 사망 체크 (아군이고 C-001인 경우)
+          if(!wasEnemy && toId && toId.startsWith('C-001@')) {
+            console.log('[PROTAGONIST-DEATH] 주인공 사망 감지 - 전투 완전 중단', { toId });
+            
+            // 전투를 즉시 패배로 설정하고 모든 진행 중단
+            B.winner = 'enemy';
+            B.protagonistDead = true;
+            B.gameOverTriggered = true; // 모든 후속 처리 차단
+            B.animating = false; // 애니메이션 중단
+            
+            // 진행 중인 모든 턴 처리 중단
+            clearInterval(window._battleTurnInterval);
+            
+            // 사망 연출 후 패배 처리
+            setTimeout(() => {
+              console.log('[PROTAGONIST-DEATH] 패배 결과 표시');
+              showResult(false); // 패배로 처리
+            }, 1200); // 사망 연출 시간 확보
+            return; // 일반 사망 연출은 건너뛰고 패배 처리로
+          }
+          
           if(slotEl){
             // 사망 연출 빠르게 시작
             console.debug?.('[death-start]', toId, 'death begins');
@@ -1428,15 +1450,35 @@ export async function renderBattleView(root, state, skipLoading = false){
     // 턴이 넘어간 후 하이라이트를 갱신
     setTurnHighlight();
     debugFinish('after-player-turn');
-    if(!B.awaitingUpgrade && window.BATTLE.isBattleFinished(B)){ console.debug('[finish] end after player turn', { battleId:B.id, winner:B.winner }); return showResult(B.winner==='ally'); }
-    if(B.awaitingUpgrade){ console.debug('[upgrade-wait] start before enemy phase'); await new Promise(r=>{ B._awaitUpgradeResolve = r; }); debugFinish('after-upgrade-before-enemy'); if(window.BATTLE.isBattleFinished(B)){ console.debug('[finish] end after upgrade before enemy'); return showResult(B.winner==='ally'); } }
+    if(!B.awaitingUpgrade && window.BATTLE.isBattleFinished(B)){ 
+      console.debug('[finish] end after player turn', { battleId:B.id, winner:B.winner, gameOverTriggered: B.gameOverTriggered }); 
+      // 게임 오버가 이미 트리거된 경우 전투 결과 처리 스킵
+      if(B.gameOverTriggered) return;
+      return showResult(B.winner==='ally'); 
+    }
+    if(B.awaitingUpgrade){ 
+      console.debug('[upgrade-wait] start before enemy phase'); 
+      await new Promise(r=>{ B._awaitUpgradeResolve = r; }); 
+      debugFinish('after-upgrade-before-enemy'); 
+      if(window.BATTLE.isBattleFinished(B)){ 
+        console.debug('[finish] end after upgrade before enemy'); 
+        if(B.gameOverTriggered) return; // 게임 오버 트리거된 경우 스킵
+        return showResult(B.winner==='ally'); 
+      } 
+    }
     await runEnemyPhase();
   }
 
   // 적 턴 자동 수행 함수
   async function runEnemyPhase(){
+    // 게임 오버가 트리거된 경우 적 턴 진행 중단
+    if(B.gameOverTriggered || B.protagonistDead) {
+      console.log('[ENEMY-PHASE] 게임 오버로 인한 적 턴 중단');
+      return;
+    }
+    
     let safety=20;
-    while(safety-- > 0 && B.enemyOrder.includes(B.turnUnit)){
+    while(safety-- > 0 && B.enemyOrder.includes(B.turnUnit) && !B.gameOverTriggered && !B.protagonistDead){
       const attackerId = B.turnUnit; // 공격자 ID를 고정 캡처
       const foe = B.units[attackerId]; if(!foe) break;
       const foeSkillId = foe.skills?.[0]; const foeSkill = foeSkillId? state.data.skills[foeSkillId]: null;
@@ -1504,7 +1546,12 @@ export async function renderBattleView(root, state, skipLoading = false){
       // 스킬 처리로 다음 턴 유닛으로 넘어갔으므로 하이라이트 갱신
       setTurnHighlight();
       debugFinish('after-enemy-turn-iteration');
-      if(window.BATTLE.isBattleFinished(B)){ console.debug('[finish] end after enemy iteration', { battleId:B.id, winner:B.winner }); showResult(B.winner==='ally'); return; }
+      if(window.BATTLE.isBattleFinished(B)){ 
+        console.debug('[finish] end after enemy iteration', { battleId:B.id, winner:B.winner, gameOverTriggered: B.gameOverTriggered }); 
+        if(B.gameOverTriggered) return; // 게임 오버 트리거된 경우 스킵
+        showResult(B.winner==='ally'); 
+        return; 
+      }
     }
     // 애니메이션이 모두 끝난 후에만 리렌더(연출 보존)
     if(!B.refreshScheduled){
@@ -1512,7 +1559,7 @@ export async function renderBattleView(root, state, skipLoading = false){
       setTimeout(async ()=>{
         B.refreshScheduled = false;
         debugFinish('enemy-phase-tail');
-        if(!window.BATTLE.isBattleFinished(B) && !B.animating){
+        if(!window.BATTLE.isBattleFinished(B) && !B.animating && !B.gameOverTriggered){
           await renderBattleView(root, state, true); // 전투 중 리렌더링은 로딩 스킵
         }
       }, 120);
@@ -1520,6 +1567,17 @@ export async function renderBattleView(root, state, skipLoading = false){
   }
 
   function showResult(isWin){
+    // 주인공 사망 시 특별 처리
+    const protagonistDead = B.protagonistDead || 
+                           (B.deadAllies || []).includes('C-001') || 
+                           (B.deadAllies || []).some(id => id && id.startsWith('C-001'));
+    
+    if(protagonistDead && !isWin) {
+      console.log('[PROTAGONIST-DEATH] 주인공 사망으로 인한 패배 - 특별 처리', { deadAllies: B.deadAllies });
+      handleProtagonistDefeat();
+      return;
+    }
+    
     const backdrop = document.createElement('div'); backdrop.className='modal-backdrop';
     const modal = document.createElement('div'); modal.className='modal';
     modal.innerHTML = `<h3>${isWin? '승리': '패배'}</h3><p>${isWin? '전투에서 승리했습니다.': '전투에서 패배했습니다.'}</p><div class="actions"><button class="btn" id="btnToRoutes">루트로</button></div>`;
@@ -1626,6 +1684,86 @@ export async function renderBattleView(root, state, skipLoading = false){
       state.ui.currentEpisode = null; state.ui.battle = null;
       const btn = document.querySelector('nav button[data-view=routes]');
       if(btn){ btn.click(); }
+    };
+  }
+  
+  function handleProtagonistDefeat(){
+    // 기존 모든 모달 제거
+    document.querySelectorAll('.modal-backdrop').forEach(el => el.remove());
+    
+    const backdrop = document.createElement('div'); 
+    backdrop.className='modal-backdrop';
+    backdrop.id = 'protagonist-death-modal'; // 고유 ID로 보호
+    backdrop.style.zIndex = '9999'; // 최상위 표시
+    
+    const modal = document.createElement('div'); 
+    modal.className='modal';
+    modal.innerHTML = `<h3>💀 주인공 사망</h3><p>주인공이 쓰러졌습니다...</p><div class="actions"><button class="btn" id="btnToDefeatEvent">계속</button></div>`;
+    backdrop.appendChild(modal); 
+    
+    // body에 직접 추가하여 frame 밖에서 보호
+    document.body.appendChild(backdrop);
+    
+    modal.querySelector('#btnToDefeatEvent').onclick=()=>{
+      console.debug('[protagonist-defeat]', { battleId: B.id });
+      
+      // 전투 결과 플래그 기록 (패배)
+      try{
+        const key = `bt.${B.id||'BT-010'}.win`;
+        import('../engine/rules.js').then(mod=>{
+          const setFlag = mod.setFlag || ((st,k,v)=>{ st.flags=st.flags||{}; st.flags[k]=v; });
+          setFlag(state, key, false);
+        }).catch(()=>{ state.flags = state.flags || {}; state.flags[key] = false; });
+      }catch{ const key = `bt.${B.id||'BT-010'}.win`; state.flags = state.flags || {}; state.flags[key] = false; }
+      
+      delete state.ui.battleState;
+      const curBid = B.id || 'BT-010';
+      const btData = state.data?.battles?.[curBid];
+      
+      // 주인공 사망 전용 패배 이벤트가 있는지 확인
+      const defeatEvent = btData?.protagonistDeathNext || btData?.loseNext;
+      
+      if(defeatEvent) {
+        console.log('[PROTAGONIST-DEATH] 패배 이벤트로 이동:', defeatEvent);
+        
+        if(defeatEvent.startsWith('EP-')) {
+          state.ui.currentEpisode = defeatEvent;
+          state.ui.battle = null;
+          const btnEp = document.querySelector('nav button[data-view=episode]');
+          if(btnEp) { btnEp.click(); return; }
+        } else if(defeatEvent.startsWith('R-')) {
+          const route = (state.data.routes||[]).find(r => r.id === defeatEvent);
+          if(route) {
+            // 루트 방문 처리
+            state.flags = state.flags || {};
+            state.flags.visitedRoutes = state.flags.visitedRoutes || {};
+            state.flags.runVisitedRoutes = state.flags.runVisitedRoutes || {};
+            state.flags.visitedRoutes[route.id] = true;
+            state.flags.runVisitedRoutes[route.id] = true;
+            state.flags.lastRouteId = route.id;
+            
+            if((route.next||'').startsWith('EP-')) {
+              state.ui.currentEpisode = route.next;
+              state.ui.battle = null;
+              const btnEp = document.querySelector('nav button[data-view=episode]');
+              if(btnEp) { btnEp.click(); return; }
+            }
+          }
+          // 루트 화면으로
+          const btnRoutes = document.querySelector('nav button[data-view=routes]');
+          if(btnRoutes) { btnRoutes.click(); return; }
+        }
+      } else {
+        // 패배 이벤트가 없으면 범용 게임 오버
+        console.log('[PROTAGONIST-DEATH] 범용 게임 오버로 처리');
+        if(typeof window.triggerGameOver === 'function') {
+          window.triggerGameOver(state, 'protagonist_death_no_defeat_event');
+        }
+      }
+      
+      // 주인공 사망 모달 제거
+      const deathModal = document.getElementById('protagonist-death-modal');
+      if(deathModal) deathModal.remove();
     };
   }
 }

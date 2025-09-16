@@ -87,6 +87,18 @@ export function applyEffects(state, effects){
       for(const r of pref){ const idx=findEmpty(r); if(idx>=0){ state.party.members[idx]=id; if(!state.party.positions) state.party.positions={}; state.party.positions[id]=r; placed=true; break; } }
       if(!placed){ /* all full → do nothing */ }
     }
+    if(e.type==='gameover.reset'){
+      // 게임 오버 리셋 효과
+      if(typeof window.performGameOver === 'function') {
+        window.performGameOver(state);
+      }
+    }
+    if(e.type==='gameover.trigger'){
+      // 게임 오버 트리거 효과
+      if(typeof window.triggerGameOver === 'function') {
+        window.triggerGameOver(state, e.reason || 'event');
+      }
+    }
   });
 }
 

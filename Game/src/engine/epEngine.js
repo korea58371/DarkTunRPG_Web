@@ -167,10 +167,104 @@ function forceReloadImages(){
   console.log('모든 이미지가 강제로 새로고침되었습니다.');
 }
 
+// 게임 오버 처리 함수
+async function performGameOver(state){
+  console.log('[GAMEOVER] 게임 오버 처리 시작');
+  
+  // 1. 상태 초기화
+  const preserveData = {
+    data: state.data // 게임 데이터는 보존
+  };
+  
+  // 2. 모든 게임 상태 초기화
+  Object.keys(state).forEach(key => {
+    if(key !== 'data') delete state[key];
+  });
+  
+  // 3. 기본 상태로 재설정
+  Object.assign(state, {
+    ...preserveData,
+    party: { members: ['C-001'], positions: { 'C-001': 1 } },
+    persist: { hp: {}, mp: {} },
+    flags: {},
+    skillProgress: {},
+    ui: {},
+    ownedUnits: { 'C-001': true }
+  });
+  
+  // 4. 새로운 난수 시드 생성
+  if(typeof window.newRunSeed === 'function') {
+    state.rng = window.newRunSeed();
+    const seedSpan = document.getElementById('seed'); 
+    if(seedSpan) seedSpan.textContent = state.rng.seed;
+  }
+  
+  console.log('[GAMEOVER] 상태 초기화 완료', { newSeed: state.rng?.seed });
+}
+
+// 게임 오버 트리거 함수
+function triggerGameOver(state, reason = 'unknown'){
+  console.log('[GAMEOVER] 게임 오버 트리거:', reason);
+  
+  // 전투 상태 완전 정리
+  if(state.ui.battleState) {
+    state.ui.battleState.gameOverTriggered = true;
+    state.ui.battleState.winner = 'gameover';
+  }
+  
+  // 게임 오버 에피소드로 이동
+  state.ui.currentEpisode = 'EP-GAMEOVER';
+  state.ui.battle = null;
+  delete state.ui.battleState;
+  
+  // 게임 오버 사유 기록
+  state.flags = state.flags || {};
+  state.flags.gameOverReason = reason;
+  
+  // 모든 진행 중인 애니메이션과 타이머 정리
+  try {
+    document.querySelectorAll('.modal-backdrop').forEach(el => el.remove());
+    clearAllBattleTimers();
+  } catch(e) {
+    console.warn('[gameover-cleanup-error]', e);
+  }
+  
+  // 에피소드 화면으로 이동
+  if(typeof window.render === 'function') {
+    window.render('episode');
+  } else {
+    const btn = document.querySelector('nav button[data-view=episode]');
+    if(btn) btn.click();
+  }
+}
+
+// 전투 관련 타이머 정리 함수
+function clearAllBattleTimers(){
+  // 모든 setTimeout/setInterval 정리 (전역 타이머 ID 추적이 없으므로 DOM 기반 정리)
+  try {
+    const battleFrame = document.querySelector('.battle-frame');
+    if(battleFrame) {
+      // 전투 관련 모든 애니메이션 중지
+      battleFrame.getAnimations?.().forEach(anim => anim.cancel());
+      
+      // 전투 관련 요소들 정리
+      battleFrame.querySelectorAll('*').forEach(el => {
+        try {
+          el.getAnimations?.().forEach(anim => anim.cancel());
+        } catch(e) {}
+      });
+    }
+  } catch(e) {
+    console.warn('[clear-timers-error]', e);
+  }
+}
+
 // 전역에서 접근 가능하도록 설정
 if(typeof window !== 'undefined') {
   window.clearEpisodeImageCache = clearImageCache;
   window.forceReloadEpisodeImages = forceReloadImages;
+  window.performGameOver = performGameOver;
+  window.triggerGameOver = triggerGameOver;
   
   // 개발 편의를 위한 단축키
   window.reloadImages = forceReloadImages;
@@ -302,6 +396,37 @@ async function waitAdvance(clickRoot, globalSkipState){
 // Navigate after choice
 function navigateAfter(state, next){
   if(!next) return;
+  
+  // GAMEOVER screen
+  if(next==='GAMEOVER'){
+    const backdrop = document.createElement('div'); backdrop.className='modal-backdrop'; backdrop.id='ep-gameover-backdrop';
+    const modal = document.createElement('div'); modal.className='modal';
+    modal.innerHTML = `<h3>Game Over</h3><p>게임이 종료되었습니다.</p><p style="color:#9aa0a6;">잠시 후 타이틀로 돌아갑니다...</p>`;
+    backdrop.appendChild(modal); document.body.appendChild(backdrop);
+    
+    // 게임 오버 처리
+    setTimeout(async () => {
+      try{
+        // 상태 완전 초기화
+        await performGameOver(state);
+        
+        // VN DOM 정리
+        const epWrap = document.querySelector('.ep-vn'); if(epWrap) epWrap.remove();
+        const gameoverBd = document.getElementById('ep-gameover-backdrop'); if(gameoverBd) gameoverBd.remove();
+        document.querySelectorAll('.modal-backdrop').forEach(el=>{ try{ el.remove(); }catch{} });
+        
+        // 타이틀로 이동
+        if(typeof window.render==='function'){ await window.render('title'); }
+        else { const btn=document.querySelector('nav button[data-view=title]'); if(btn) btn.click(); }
+      }catch(e){
+        console.error('[gameover-error]', e);
+        // 폴백: 강제 리로드
+        window.location.reload();
+      }
+    }, 2000);
+    return;
+  }
+  
   // END screen
   if(next==='END-01'){
     const backdrop = document.createElement('div'); backdrop.className='modal-backdrop'; backdrop.id='ep-end-backdrop';

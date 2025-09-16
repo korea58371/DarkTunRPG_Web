@@ -3,14 +3,30 @@ export const BATTLES = {
     "id": "BT-100",
     "enemy": [
       {
-        "unit": "E-301",
+        "unit": "E-101",
+        "row": 1,
+        "col": 0
+      },
+      {
+        "unit": "E-101",
         "row": 2,
+        "col": 0
+      },
+      {
+        "unit": "E-102",
+        "row": 2,
+        "col": 1
+      },
+      {
+        "unit": "E-101",
+        "row": 3,
         "col": 0
       }
     ],
     "seed": 0,
     "winNext": "R-101",
-    "loseNext": "",
+    "loseNext": "EP-DEFEAT-BT100",
+    "protagonistDeathNext": "EP-GAMEOVER",
     "bg": "BG_002.png"
   },
   "BT-200": {
@@ -41,10 +57,11 @@ export const BATTLES = {
         "row": 3,
         "col": 0
       }
-    ],
+    ],  
     "seed": 67890,
     "winNext": "EP-300",
     "loseNext": "EP-205",
+    "protagonistDeathNext": "EP-GAMEOVER",
     "bg": "BG_002.png"
   },
   "BT-400": {
@@ -54,6 +71,8 @@ export const BATTLES = {
     ],
     "seed": 98765,
     "winNext": "EP-900",
+    "loseNext": "EP-DEFEAT-BT400",
+    "protagonistDeathNext": "EP-GAMEOVER",
     "bg": "BG_002.png"
   }
 };

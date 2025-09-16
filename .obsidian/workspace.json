@@ -256,6 +256,7 @@
   },
   "active": "5dc42f359032ee67",
   "lastOpenFiles": [
+    "Game/assets/mon/mon_002_atk.png",
     "Game/assets/bg/story/BG_001.png",
     "Game/src/data/explorations.js.crswap",
     "Game/src/data/battles.js.crswap",
@@ -279,7 +280,6 @@
     "GDD/시스템/[SYS] 전투 - 연출 시스템.md",
     "GDD/데이터/EPISODE_SYSTEM_GUIDE.md",
     "Game/EPISODE_SYSTEM_GUIDE.md",
-    "Game/assets/bg/story/bg_001.png",
     "GDD/시스템/[SYS] 타일 이동 시스템.md",
     "GDD/시스템/[SYS] 상태 지속.md",
     "GDD/시스템/[SYS] 전투 - 데이터와 수치.md",

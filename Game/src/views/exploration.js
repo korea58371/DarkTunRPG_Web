@@ -85,8 +85,17 @@ export async function renderExplorationView(root, state, explorationId) {
     bg.style.backgroundImage = `url('${explorationData.background}')`;
   }
   
-  // 탐색 객체들 배치
-  (explorationData.objects || []).forEach(obj => {
+  // 탐색 객체들 배치 (조건 체크 후)
+  for (const obj of (explorationData.objects || [])) {
+    // 조건 체크 - 조건이 있으면 확인
+    if (obj.requirements) {
+      const meetsRequirements = await checkExplorationRequirements(state, obj.requirements);
+      if (!meetsRequirements) {
+        console.log('[EXPLORATION] 조건 미달성으로 객체 숨김:', obj.id);
+        continue; // 조건을 만족하지 않으면 건너뛰기
+      }
+    }
+    
     const objEl = document.createElement('div');
     objEl.className = 'exploration-object';
     objEl.dataset.objectId = obj.id;
@@ -141,7 +150,7 @@ export async function renderExplorationView(root, state, explorationId) {
     };
     
     objectsContainer.appendChild(objEl);
-  });
+  }
   
   // 나가기 버튼
   wrap.querySelector('#exploExit').onclick = () => {
@@ -158,16 +167,77 @@ export async function renderExplorationView(root, state, explorationId) {
   
   root.innerHTML = '';
   root.appendChild(wrap);
+  
+  // 상태 변화 감지를 위한 리프레시 시스템
+  setupExplorationRefresh(state, explorationId, root);
+}
+
+// 탐색 화면 리프레시 시스템
+function setupExplorationRefresh(state, explorationId, root) {
+  let refreshTimeout = null;
+  
+  // 플래그 변경 감지 함수
+  const checkForChanges = async () => {
+    if (refreshTimeout) return; // 이미 리프레시 중이면 스킵
+    
+    refreshTimeout = setTimeout(async () => {
+      try {
+        console.log('[EXPLORATION] 상태 변경 감지, 리프레시 중...');
+        await renderExplorationView(root, state, explorationId);
+      } catch (error) {
+        console.error('[EXPLORATION] 리프레시 실패:', error);
+      } finally {
+        refreshTimeout = null;
+      }
+    }, 100); // 100ms 지연으로 연속 변경에 대응
+  };
+  
+  // 플래그 변경 감지를 위한 프록시 설정
+  if (!state.flags) {
+    state.flags = {};
+  }
+  
+  // 플래그 객체를 프록시로 감싸서 변경 감지
+  const originalFlags = state.flags;
+  state.flags = new Proxy(originalFlags, {
+    set(target, property, value) {
+      const oldValue = target[property];
+      target[property] = value;
+      
+      // 값이 실제로 변경되었을 때만 리프레시
+      if (oldValue !== value) {
+        console.log('[EXPLORATION] 플래그 변경:', property, oldValue, '->', value);
+        checkForChanges();
+      }
+      
+      return true;
+    }
+  });
+  
+  // 탐색 종료 시 정리
+  const cleanup = () => {
+    if (refreshTimeout) {
+      clearTimeout(refreshTimeout);
+      refreshTimeout = null;
+    }
+    // 원본 플래그 객체로 복원
+    state.flags = originalFlags;
+  };
+  
+  window.addEventListener('beforeunload', cleanup);
+  
+  // 탐색 종료 시에도 정리
+  const originalRender = window.render;
+  if (originalRender) {
+    window.render = function(view) {
+      cleanup();
+      return originalRender.call(this, view);
+    };
+  }
 }
 
 async function handleObjectClick(state, obj, explorationData) {
   console.log('[EXPLORATION] 객체 클릭:', obj.id);
-  
-  // 조건 체크
-  if (obj.requirements && !(await checkExplorationRequirements(state, obj.requirements))) {
-    showExplorationTooltip(obj.failMessage || '아직 상호작용할 수 없습니다.');
-    return;
-  }
   
   // 이벤트 상태 체크 (한번만 보상)
   const eventKey = `explo.${explorationData.id}.${obj.id}_triggered`;

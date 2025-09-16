@@ -51,57 +51,9 @@ export const EXPLORATIONS = {
             "value": true
           }
         ]
-      },
-      {
-        "id": "safe_path",
-        "x": 80,
-        "y": 80,
-        "width": 100,
-        "height": 60,
-        "image": "",
-        "tooltip": "안전해 보이는 길",
-        "event": {
-          "type": "route"
-        },
-        "requirements": []
       }
     ],
     "exitRoute": "R-100",
     "exitMessage": "이곳을 떠나시겠습니까?"
-  },
-  "EXPLO-DEMO": {
-    "id": "EXPLO-DEMO",
-    "title": "탐색 시스템 데모",
-    "description": "탐색 시스템을 테스트해보세요. 화면의 객체들을 클릭해보세요.",
-    "background": "assets/bg/BG_002.png",
-    "objects": [
-      {
-        "id": "demo_object1",
-        "x": 30,
-        "y": 40,
-        "width": 100,
-        "height": 100,
-        "tooltip": "테스트 객체 1",
-        "event": {
-          "type": "message",
-          "title": "발견!",
-          "text": "첫 번째 객체를 발견했습니다."
-        }
-      },
-      {
-        "id": "demo_object2",
-        "x": 70,
-        "y": 60,
-        "width": 80,
-        "height": 80,
-        "tooltip": "테스트 객체 2",
-        "event": {
-          "type": "episode",
-          "episodeId": "EP-001"
-        }
-      }
-    ],
-    "exitRoute": "R-001",
-    "exitMessage": "데모를 마치고 돌아가시겠습니까?"
   }
 };

@@ -1165,8 +1165,16 @@ export function renderBattleView(root, state){
             slotEl.classList.add('impact'); setTimeout(()=>slotEl.classList.remove('impact'), 200);
             const bar = slotEl.querySelector('.hpbar > span'); if(bar && typeof ev.hp==='number'){ bar.style.width = `${Math.max(0,(ev.hp/(B.units[toId].hpMax||1))*100)}%`; } else { const u=B.units[toId]; if(bar){ bar.style.width = `${Math.max(0,(u.hp/u.hpMax)*100)}%`; } }
             const sbar = slotEl.querySelector('.shieldbar > span'); if(sbar){ const sv = (typeof ev.shield==='number')? ev.shield : (B.units[toId].shield||0); sbar.style.width = `${Math.max(0, Math.min(100, (sv/(B.units[toId].hpMax||1))*100))}%`; const barWrap = sbar.parentElement; if(barWrap){ barWrap.style.display = (sv>0)? 'block' : 'none'; } }
-            // 피격 스프라이트(고정 비율 유지)
-            try{ applyPortraitState(toId, 'hit'); setTimeout(()=> applyPortraitState(toId, 'default'), 240); }catch{}
+            // 피격 스프라이트(고정 비율 유지) - 유지시간 2배 연장
+            try{ 
+              applyPortraitState(toId, 'hit'); 
+              
+              // 사망 판정인 경우 피격 스프라이트 유지, 아닌 경우만 기본으로 복귀
+              const willDie = (typeof ev.hp === 'number' && ev.hp <= 0);
+              if(!willDie) {
+                setTimeout(()=> applyPortraitState(toId, 'default'), 480); // 240ms -> 480ms (2배)
+              }
+            }catch{}
             const dmg = document.createElement('div'); let cls='dmg-float'; let text=`-${ev.dmg}`; 
             if(ev.crit){ cls+=' dmg-crit'; text=`💥 ${ev.dmg}`; } 
             else if(ev.blocked){ cls+=' dmg-block'; text=`🛡️ ${ev.dmg}`; }

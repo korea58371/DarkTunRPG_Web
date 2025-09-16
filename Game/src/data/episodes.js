@@ -97,20 +97,15 @@ export const EPISODES = {
       },
       {
         "cmd": "say",
-        "speaker": "소리",
-        "text": "크르릉..."
-      },
-      {
-        "cmd": "say",
         "speaker": "주인공",
-        "text": "이건... 짐승의 울음소리인가?"
+        "text": "일단 주변을 탐색해보자. 뭔가 단서가 있을지도 모른다."
       },
       {
         "cmd": "choice",
         "items": [
           {
-            "label": "소리를 향해 이동한다.",
-            "next": "R-100",
+            "label": "주변을 탐색한다",
+            "next": "EXPLO-001",
             "effects": []
           }
         ]
@@ -487,6 +482,41 @@ export const EPISODES = {
               {
                 "type": "gameover.trigger",
                 "reason": "final_boss_death"
+              }
+            ]
+          }
+        ]
+      }
+    ]
+  },
+  "EP-MONSTER-ENCOUNTER": {
+    "events": [
+      {
+        "cmd": "say",
+        "speaker": "주인공",
+        "text": "뭐지... 저건... 괴물?"
+      },
+      {
+        "cmd": "say",
+        "speaker": "나레이션",
+        "text": "그림자 속에서 해골 병사가 모습을 드러냈다."
+      },
+      {
+        "cmd": "choice",
+        "items": [
+          {
+            "label": "싸운다",
+            "next": "BT-100",
+            "effects": []
+          },
+          {
+            "label": "일단 물러난다",
+            "next": "EXPLO-001",
+            "effects": [
+              {
+                "type": "flag.set",
+                "key": "explo.EXPLO-001.monster_avoided",
+                "value": true
               }
             ]
           }

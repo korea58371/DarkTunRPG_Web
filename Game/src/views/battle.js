@@ -1152,7 +1152,11 @@ export async function renderBattleView(root, state, skipLoading = false){
           state.skillProgress = state.skillProgress || {}; state.skillProgress[baseId] = state.skillProgress[baseId] || {}; state.skillProgress[baseId][sId] = state.skillProgress[baseId][sId] || { level:1, xp:0, nextXp: (state.data.skills?.SKILL_CFG?.baseNext||20), taken:[] };
           const progress = state.skillProgress[baseId][sId];
           const pool = (state.data.skills?.[sId]?.upgrades||[]).filter(up=> up && (up.type!=='once' || !(progress.taken||[]).includes(up.id)));
-          const rng = state.rng || { int:(n)=> Math.floor(Math.random()*n) };
+          const rng = (state.rng && typeof state.rng.int === 'function') ? state.rng : { 
+            int:(n)=> Math.floor(Math.random()*n),
+            next:()=> Math.random(),
+            seed: Date.now() 
+          };
           const picks = [];
           for(let i=0;i<Math.min(3, pool.length);i++){ const idx = rng.int(pool.length); picks.push(pool.splice(idx,1)[0]); }
           if(!picks.length){

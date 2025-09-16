@@ -4,6 +4,7 @@ import { UNITS } from './units.js';
 import { SKILLS } from './skills.js';
 import { BATTLES } from './battles.js';
 import { PASSIVES } from './passives.js';
+import { EXPLORATIONS } from './explorations.js';
 
 export const DATA = {
   routes: ROUTES,
@@ -12,6 +13,7 @@ export const DATA = {
   skills: SKILLS,
   passives: PASSIVES,
   battles: BATTLES,
+  explorations: EXPLORATIONS,
 };
 
 

@@ -6,6 +6,9 @@ import { renderEpisodeView } from './views/episode.js';
 import { renderSkillEditorView } from './views/skillEditor.js';
 import { renderBattleView } from './views/battle.js';
 import { renderRouteEditorView } from './views/routeEditor.js';
+import { showSaveLoadModal } from './views/saveLoad.js';
+import { renderExplorationView } from './views/exploration.js';
+import { renderExplorationEditorView } from './views/explorationEditor.js';
 import * as BATTLE from './engine/battleCore.js';
 
 const app = document.getElementById('app');
@@ -51,6 +54,11 @@ async function render(view){
         return renderSkillEditorView(app, state);
       case 'routeEditor':
         return renderRouteEditorView(app, state);
+      case 'exploration':
+        const exploId = state.ui.currentExploration || 'EXPLO-001';
+        return await renderExplorationView(app, state, exploId);
+      case 'explorationEditor':
+        return renderExplorationEditorView(app, state);
       default: return renderRoutesView(app, state);
     }
   }catch(err){
@@ -60,8 +68,11 @@ async function render(view){
 }
 
 document.querySelectorAll('nav button').forEach(btn=>{
-  btn.addEventListener('click', async ()=> await render(btn.dataset.view));
+  if(btn.dataset.view) {
+    btn.addEventListener('click', async ()=> await render(btn.dataset.view));
+  }
 });
+
 
 // 전역 리셋: 배드 엔딩 등에서 호출
 window.resetState = async ()=>{

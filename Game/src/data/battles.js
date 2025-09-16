@@ -24,8 +24,8 @@ export const BATTLES = {
       }
     ],
     "seed": 0,
-    "winNext": "R-101",
-    "loseNext": "EP-DEFEAT-BT100",
+    "winNext": "EP-101",
+    "loseNext": "EXPLO-001",
     "protagonistDeathNext": "EP-GAMEOVER",
     "bg": "BG_002.png"
   },
@@ -57,7 +57,7 @@ export const BATTLES = {
         "row": 3,
         "col": 0
       }
-    ],  
+    ],
     "seed": 67890,
     "winNext": "EP-300",
     "loseNext": "EP-205",

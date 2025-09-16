@@ -64,6 +64,12 @@ function injectStylesOnce(){
   .ep-vn .skip-btn { position:absolute; right:12px; bottom:240px; background:rgba(8,12,22,0.8); border:1px solid #2b3450; color:#9aa0a6; font-size:18px; padding:8px 16px; border-radius:8px; cursor:pointer; transition:all 0.2s ease; z-index:5; pointer-events:auto; }
   .ep-vn .skip-btn:hover { background:rgba(43,52,80,0.8); color:#cbd5e1; border-color:#5cc8ff; }
   .ep-vn .skip-btn:active { transform:scale(0.95); }
+  .ep-vn .save-btn { position:absolute; left:12px; bottom:240px; background:rgba(42,74,42,0.8); border:1px solid #4a6a4a; color:#a0ff9e; font-size:16px; padding:8px 16px; border-radius:8px; cursor:pointer; transition:all 0.2s ease; z-index:5; pointer-events:auto; }
+  .ep-vn .save-btn:hover { background:rgba(74,106,74,0.8); color:#cbd5e1; border-color:#a0ff9e; }
+  .ep-vn .save-btn:disabled { opacity:0.5; cursor:not-allowed; }
+  .ep-vn .load-btn { position:absolute; left:12px; bottom:180px; background:rgba(74,74,42,0.8); border:1px solid #6a6a4a; color:#ffd479; font-size:16px; padding:8px 16px; border-radius:8px; cursor:pointer; transition:all 0.2s ease; z-index:5; pointer-events:auto; }
+  .ep-vn .load-btn:hover { background:rgba(106,106,74,0.8); color:#cbd5e1; border-color:#ffd479; }
+  .ep-vn .load-btn:disabled { opacity:0.5; cursor:not-allowed; }
   .ep-vn .modal-backdrop { position:fixed; inset:0; background:rgba(0,0,0,0.5); display:flex; align-items:center; justify-content:center; }
   .ep-vn .modal { background:#0f1524; border:1px solid #2b3450; color:#cbd5e1; padding:16px; border-radius:10px; min-width:320px; }
   `; document.head.appendChild(st);
@@ -464,6 +470,7 @@ function navigateAfter(state, next){
   }
   if(next.startsWith('EP-')){ state.ui.currentEpisode=next; (window.render? window.render('episode'): document.querySelector('nav button[data-view=episode]')?.click()); return; }
   if(next.startsWith('BT-')){ state.ui.battle=next; (window.render? window.render('battle'): document.querySelector('nav button[data-view=battle]')?.click()); return; }
+  if(next.startsWith('EXPLO-')){ state.ui.currentExploration=next; (window.render? window.render('exploration'): null); return; }
 }
 
 export async function renderEpisodeVN(root, state, epId, userCfg){
@@ -483,6 +490,8 @@ export async function renderEpisodeVN(root, state, epId, userCfg){
   const choicesWrap=document.createElement('div'); choicesWrap.className='choices'; stage.appendChild(choicesWrap);
   const btnHistory=document.createElement('button'); btnHistory.className='btn history-btn'; btnHistory.textContent='히스토리'; stage.appendChild(btnHistory);
   const btnSkip=document.createElement('button'); btnSkip.className='skip-btn'; btnSkip.textContent='⏭️ 스킵'; stage.appendChild(btnSkip);
+  const btnSave=document.createElement('button'); btnSave.className='save-btn'; btnSave.textContent='💾 저장'; stage.appendChild(btnSave);
+  const btnLoad=document.createElement('button'); btnLoad.className='load-btn'; btnLoad.textContent='📁 불러오기'; stage.appendChild(btnLoad);
   state.ui = state.ui || {}; state.ui.epHistory = state.ui.epHistory || [];
   
   // 스킵 상태 관리
@@ -510,6 +519,25 @@ export async function renderEpisodeVN(root, state, epId, userCfg){
       skipState.isSkipping = false;
       btnSkip.textContent = '⏭️ 스킵';
       btnSkip.style.background = 'rgba(8,12,22,0.8)';
+    }
+  };
+  
+  // save/load buttons
+  btnSave.onclick = async () => {
+    try {
+      const { showSaveLoadModal } = await import('../views/saveLoad.js');
+      await showSaveLoadModal(state, 'save');
+    } catch(e) {
+      console.error('[SAVE-ERROR]', e);
+    }
+  };
+  
+  btnLoad.onclick = async () => {
+    try {
+      const { showSaveLoadModal } = await import('../views/saveLoad.js');
+      await showSaveLoadModal(state, 'load');
+    } catch(e) {
+      console.error('[LOAD-ERROR]', e);
     }
   };
 

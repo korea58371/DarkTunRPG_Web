@@ -1216,7 +1216,33 @@ export function renderBattleView(root, state){
     const actorEl = (B.enemyOrder.includes(B.turnUnit)? enemyLane : allyLane).querySelector(`.unit-slot[data-unit-id="${B.turnUnit}"]`);
     const shout = (overrideSkill?.shout) || state.data.skills[useSkill.id]?.shout;
     if(actorEl && shout){ const sp=document.createElement('div'); sp.className='speech'; sp.textContent=shout; actorEl.appendChild(sp); setTimeout(()=>sp.remove(), 1800); }
-    // 즉시 실행: 이동/히트 연출을 지체 없이 로그에 쌓고 애니메이션 시작
+    
+    // 아군 공격 시 스프라이트 애니메이션 (적과 동일)
+    if(actorEl && B.allyOrder.includes(B.turnUnit) && useSkill.type !== 'move' && useSkill.type !== 'shield' && useSkill.type !== 'heal') {
+      actorEl.classList.add('attacking');
+      try{ applyPortraitState(B.turnUnit, 'attack'); }catch{}
+      // 아군 스프라이트 전진 애니메이션
+      try{
+        const sprite = actorEl.querySelector('.portrait');
+        if(sprite){
+          const dx = 40; // 아군은 오른쪽으로 전진
+          const anim = sprite.animate([
+            { transform: 'translate(-50%, 0) scale(1)' },
+            { transform: `translate(calc(-50% + ${dx}px), 0) scale(1.05)` },
+            { transform: 'translate(-50%, 0) scale(1)' }
+          ], { duration: 260, easing:'ease-out' });
+          // 애니메이션 완료 후 기본 이미지로 복귀
+          anim.addEventListener('finish', ()=>{ 
+            try{ 
+              console.debug('[ally-sprite-finish->default]', { unit: B.turnUnit }); 
+              applyPortraitState(B.turnUnit, 'default'); 
+              actorEl.classList.remove('attacking');
+            }catch{} 
+          });
+        }
+      }catch{}
+    }
+    
     window.BATTLE.performSkill(state, B, actor, useSkill);
     await new Promise(r=>setTimeout(r, 10));
     B.animating = true;

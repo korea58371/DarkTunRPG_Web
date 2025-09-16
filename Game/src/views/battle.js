@@ -457,6 +457,46 @@ export function renderBattleView(root, state){
     // 기본적으로 살아있는 적이 있으면 타겟 가능
     return B.enemyOrder.some(id => id && (B.units[id]?.hp > 0));
   }
+  
+  function getInvalidTargetMessage(sk, targetId){
+    if(!sk || !targetId) return null;
+    
+    const target = B.units[targetId];
+    if(!target) return "대상을 찾을 수 없습니다.";
+    
+    // 죽은 대상
+    if(target.hp <= 0) return "죽은 대상은 선택할 수 없습니다.";
+    
+    // 이동 스킬의 경우
+    if(sk.type === 'move') {
+      // 이동 가능 위치 검증 로직은 복잡하므로 일반적인 메시지
+      return "이동 가능한 위치가 아닙니다.";
+    }
+    
+    // 아군 대상 스킬인데 적을 선택한 경우
+    if(sk.range === 'ally' && B.enemyOrder.includes(targetId)) {
+      return "아군만 선택할 수 있습니다.";
+    }
+    
+    // 적군 대상 스킬인데 아군을 선택한 경우
+    if((sk.range === 'ranged' || sk.range === 'melee') && B.allyOrder.includes(targetId)) {
+      return "적군만 선택할 수 있습니다.";
+    }
+    
+    // 근접 스킬인데 최전열이 아닌 적을 선택한 경우
+    if(sk.range === 'melee' && B.enemyOrder.includes(targetId)) {
+      const aliveEnemies = B.enemyOrder.filter(id => id && (B.units[id]?.hp > 0));
+      if(aliveEnemies.length > 0) {
+        const minCol = Math.min(...aliveEnemies.map(id => B.units[id]?.col ?? 999));
+        const targetCol = target.col ?? 999;
+        if(targetCol !== minCol) {
+          return "가장 앞열만 공격할 수 있습니다.";
+        }
+      }
+    }
+    
+    return null;
+  }
 
   function isTargetValid(sk, targetId){
     if(!sk) return false;
@@ -839,6 +879,19 @@ export function renderBattleView(root, state){
             rect: { x: rect.left, y: rect.top, w: rect.width, h: rect.height }
           });
         }catch{}
+        
+        // 스킬이 선택된 상태에서 잘못된 타겟을 선택한 경우 툴팁 표시
+        if(selectedSkill && !isTargetValid(selectedSkill, id)) {
+          const errorMessage = getInvalidTargetMessage(selectedSkill, id);
+          if(errorMessage) {
+            const rect = el.getBoundingClientRect();
+            const x = ev?.clientX ?? (rect.left + rect.width/2);
+            const y = ev?.clientY ?? (rect.top + 8);
+            window.UI_TIP?.showTooltip(errorMessage, x, y);
+            return; // 잘못된 타겟이면 선택하지 않고 종료
+          }
+        }
+        
         B.target=id; selectedTarget=id;
         try{ const base=(id||'').split('@')[0]; B._lastTargetByBase = B._lastTargetByBase || {}; B._lastTargetByBase[base]=id; }catch{}
         document.querySelectorAll('.unit-slot.is-target').forEach(x=>x.classList.remove('is-target'));

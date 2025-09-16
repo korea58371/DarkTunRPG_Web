@@ -117,25 +117,25 @@ export const EPISODES = {
       {
         "cmd": "say",
         "speaker": "???",
-        "text": "괜찮아요? 당신 덕분에 살았어요."
+        "text": "오... 제법이잖아? "
       },
       {
         "cmd": "say",
         "speaker": "동료A",
-        "text": "함께 움직이죠."
+        "text": "난 동료A라고 하는데... 같이 다니지 않겠어?"
       },
       {
         "cmd": "choice",
         "items": [
           {
             "label": "합류한다",
+            "next": "R-200",
             "effects": [
               {
                 "type": "party.add",
                 "unit": "C-014"
               }
-            ],
-            "next": "R-200"
+            ]
           }
         ]
       }
@@ -168,10 +168,6 @@ export const EPISODES = {
                 "type": "flag.set",
                 "key": "ep.EP-300.seriaJoin",
                 "value": true
-              },
-              {
-                "type": "party.add",
-                "unit": "C-015"
               }
             ]
           }

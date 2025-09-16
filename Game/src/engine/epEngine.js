@@ -58,7 +58,10 @@ function injectStylesOnce(){
   .ep-vn .dialog .name { font-weight:700; color:#e6f1ff; margin-bottom:12px; font-size:36px; }
   .ep-vn .choices { position:absolute; left:50%; top:50%; transform:translate(-50%,-50%); display:flex; flex-direction:column; gap:16px; align-items:center; justify-content:center; z-index:10; pointer-events:auto; }
   .ep-vn .choices .btn { font-size:28px; padding:14px 28px; min-width:420px; }
-  .ep-vn .history-btn { position:absolute; right:12px; bottom:180px; }
+  .ep-vn .history-btn { position:absolute; right:12px; bottom:180px; z-index:5; pointer-events:auto; }
+  .ep-vn .skip-btn { position:absolute; right:12px; bottom:240px; background:rgba(8,12,22,0.8); border:1px solid #2b3450; color:#9aa0a6; font-size:18px; padding:8px 16px; border-radius:8px; cursor:pointer; transition:all 0.2s ease; z-index:5; pointer-events:auto; }
+  .ep-vn .skip-btn:hover { background:rgba(43,52,80,0.8); color:#cbd5e1; border-color:#5cc8ff; }
+  .ep-vn .skip-btn:active { transform:scale(0.95); }
   .ep-vn .modal-backdrop { position:fixed; inset:0; background:rgba(0,0,0,0.5); display:flex; align-items:center; justify-content:center; }
   .ep-vn .modal { background:#0f1524; border:1px solid #2b3450; color:#cbd5e1; padding:16px; border-radius:10px; min-width:320px; }
   `; document.head.appendChild(st);
@@ -90,32 +93,109 @@ function pathForSfx(cfg, name){ return `${cfg.assets.sfxPath}${name}.ogg`; }
 function pathForBgm(cfg, name){ return `${cfg.assets.bgmPath}${name}.ogg`; }
 
 // Typewriter text with skip control
-async function typeText(el, text, speed, skippable){
+async function typeText(el, text, speed, skippable, globalSkipState){
   return await new Promise(resolve=>{
     let i=0; let skipping=false; const total=text.length; el.textContent='';
-    function onClick(){ if(!skippable) return; skipping=true; el.textContent=text; cleanup(); resolve(); }
-    function cleanup(){ el.removeEventListener('click', onClick); document.removeEventListener('keydown', onKey); }
-    function onKey(e){ if(e.key===' '||e.key==='Enter'){ onClick(); } }
-    el.addEventListener('click', onClick); document.addEventListener('keydown', onKey);
+    
+    // 전역 스킵이 활성화된 경우 즉시 완료
+    if(globalSkipState && globalSkipState.skipToChoice) {
+      el.textContent = text;
+      resolve();
+      return;
+    }
+    
+    function onClick(){ 
+      if(!skippable) return; 
+      skipping=true; 
+      el.textContent=text; 
+      cleanup(); 
+      resolve(); 
+    }
+    function cleanup(){ 
+      el.removeEventListener('click', onClick); 
+      document.removeEventListener('keydown', onKey); 
+    }
+    function onKey(e){ 
+      if(e.key===' '||e.key==='Enter'){ onClick(); } 
+    }
+    
+    // 클릭 이벤트를 대사창이 아닌 전체 스테이지에 바인딩
+    const stage = el.closest('.ep-stage');
+    if(stage) {
+      stage.addEventListener('click', onClick);
+      document.addEventListener('keydown', onKey);
+    } else {
+      el.addEventListener('click', onClick);
+      document.addEventListener('keydown', onKey);
+    }
+    
     const timer=setInterval(()=>{
+      // 전역 스킵 상태 확인
+      if(globalSkipState && globalSkipState.skipToChoice) {
+        skipping = true;
+        el.textContent = text;
+        clearInterval(timer);
+        cleanup();
+        resolve();
+        return;
+      }
+      
       if(skipping){ clearInterval(timer); return; }
-      if(i>=total){ clearInterval(timer); cleanup(); resolve(); return; }
+      if(i>=total){ 
+        clearInterval(timer); 
+        cleanup(); 
+        resolve(); 
+        return; 
+      }
       el.textContent += text[i++];
     }, Math.max(10, 1000/Math.max(1, speed||24)));
+    
+    // cleanup 함수 수정
+    function cleanup(){ 
+      if(stage) {
+        stage.removeEventListener('click', onClick);
+      } else {
+        el.removeEventListener('click', onClick);
+      }
+      document.removeEventListener('keydown', onKey); 
+    }
   });
 }
 
 // Wait for user advance (click anywhere on dialog or Space/Enter)
-async function waitAdvance(clickRoot){
+async function waitAdvance(clickRoot, globalSkipState){
   return await new Promise(resolve=>{
+    // 전역 스킵이 활성화된 경우 즉시 완료
+    if(globalSkipState && globalSkipState.skipToChoice) {
+      resolve();
+      return;
+    }
+    
     let armed=false; const arm=()=>{ armed=true; };
     const onClick=(e)=>{ if(!armed) return; cleanup(); resolve(); };
     const onKey=(e)=>{ if(!armed) return; if(e.key===' '||e.key==='Enter'){ cleanup(); resolve(); } };
     function cleanup(){ clickRoot.removeEventListener('click', onClick); document.removeEventListener('keydown', onKey); }
+    
+    // 스킵 상태를 주기적으로 확인하는 인터벌
+    const skipCheckInterval = setInterval(() => {
+      if(globalSkipState && globalSkipState.skipToChoice) {
+        clearInterval(skipCheckInterval);
+        cleanup();
+        resolve();
+      }
+    }, 10);
+    
     // defer arming so that the click used to skip 타이핑은 소비되고, 다음 클릭부터 진행
     setTimeout(()=>{ arm(); }, 30);
     clickRoot.addEventListener('click', onClick);
     document.addEventListener('keydown', onKey);
+    
+    // cleanup 함수 수정
+    function cleanup(){ 
+      clearInterval(skipCheckInterval);
+      clickRoot.removeEventListener('click', onClick); 
+      document.removeEventListener('keydown', onKey); 
+    }
   });
 }
 
@@ -177,13 +257,35 @@ export async function renderEpisodeVN(root, state, epId, userCfg){
   const bg=stage.querySelector('#epBg'); const popup=stage.querySelector('#epPopup'); const actors=stage.querySelector('#epActors'); const nameEl=stage.querySelector('#epName'); const textEl=stage.querySelector('#epText');
   const choicesWrap=document.createElement('div'); choicesWrap.className='choices'; stage.appendChild(choicesWrap);
   const btnHistory=document.createElement('button'); btnHistory.className='btn history-btn'; btnHistory.textContent='히스토리'; stage.appendChild(btnHistory);
+  const btnSkip=document.createElement('button'); btnSkip.className='skip-btn'; btnSkip.textContent='⏭️ 스킵'; stage.appendChild(btnSkip);
   state.ui = state.ui || {}; state.ui.epHistory = state.ui.epHistory || [];
+  
+  // 스킵 상태 관리
+  const skipState = {
+    skipToChoice: false,
+    isSkipping: false
+  };
 
   // history modal
   btnHistory.onclick=()=>{
     const bd=document.createElement('div'); bd.className='modal-backdrop'; const m=document.createElement('div'); m.className='modal';
     const lines = (state.ui.epHistory||[]).map(h=>`<div><strong>${h.speaker}</strong>: ${h.text}</div>`).join('');
     m.innerHTML = `<h3>히스토리</h3><div style="max-height:360px; overflow:auto;">${lines||'<div style=\"color:#9aa0a6;\">기록 없음</div>'}</div><div class="actions" style="margin-top:8px; text-align:right;"><button class="btn" id="hx">닫기</button></div>`; bd.appendChild(m); document.body.appendChild(bd); m.querySelector('#hx').onclick=()=> bd.remove();
+  };
+  
+  // skip button
+  btnSkip.onclick=()=>{
+    if(!skipState.skipToChoice) {
+      skipState.skipToChoice = true;
+      skipState.isSkipping = true;
+      btnSkip.textContent = '⏸️ 일시정지';
+      btnSkip.style.background = 'rgba(220,38,38,0.8)';
+    } else {
+      skipState.skipToChoice = false;
+      skipState.isSkipping = false;
+      btnSkip.textContent = '⏭️ 스킵';
+      btnSkip.style.background = 'rgba(8,12,22,0.8)';
+    }
   };
 
   // Actor registry
@@ -210,6 +312,13 @@ export async function renderEpisodeVN(root, state, epId, userCfg){
       if(!ev.name) return; 
       const url=pathForBg(cfg, ev.name); 
       try{ await loadImage(url); }catch{} 
+      
+      // 스킵 중이면 즉시 배경 변경
+      if(skipState.skipToChoice) {
+        bg.style.backgroundImage = `url('${url}')`;
+        return;
+      }
+      
       // 페이드 효과와 함께 배경 변경
       const newBg = document.createElement('div');
       newBg.style.cssText = `position:absolute; inset:0; background-image:url('${url}'); background-size:cover; background-position:center; opacity:0; transition:opacity ${ev.dur||500}ms ease;`;
@@ -249,10 +358,31 @@ export async function renderEpisodeVN(root, state, epId, userCfg){
       
       place(a); 
       a.el.style.opacity='0'; 
+      
+      // 스킵 중이면 애니메이션 생략
+      if(skipState.skipToChoice) {
+        a.el.style.opacity = '1';
+        return;
+      }
+      
       a.el.animate([{opacity:0, transform:`translate(-50%,0) scale(${a.scale*0.95})`},{opacity:1, transform:`translate(-50%,0) scale(${a.scale})`}], { duration: ev.dur||250, easing: cfg.easing, fill:'forwards' }); 
       await wait(ev.dur||250); 
     },
-    async hide(ev){ const id=ev.id; const a=actorMap.get(id); if(!a) return; a.el.animate([{opacity:1},{opacity:0}], { duration: ev.dur||200, easing: cfg.easing, fill:'forwards' }); await wait(ev.dur||200); a.el.remove(); actorMap.delete(id); },
+    async hide(ev){ 
+      const id=ev.id; const a=actorMap.get(id); if(!a) return; 
+      
+      // 스킵 중이면 즉시 제거
+      if(skipState.skipToChoice) {
+        a.el.remove(); 
+        actorMap.delete(id); 
+        return;
+      }
+      
+      a.el.animate([{opacity:1},{opacity:0}], { duration: ev.dur||200, easing: cfg.easing, fill:'forwards' }); 
+      await wait(ev.dur||200); 
+      a.el.remove(); 
+      actorMap.delete(id); 
+    },
     async move(ev){ 
       const id=ev.id; const a=actorMap.get(id); if(!a) return; 
       if(ev.pos){ 
@@ -264,6 +394,13 @@ export async function renderEpisodeVN(root, state, epId, userCfg){
         if(typeof ev.offset.x==='number') a.offsetX=ev.offset.x;
         if(typeof ev.offset.y==='number') a.offsetY=ev.offset.y;
       }
+      
+      // 스킵 중이면 즉시 이동
+      if(skipState.skipToChoice) {
+        place(a);
+        return;
+      }
+      
       const oldTransform = a.el.style.transform;
       place(a); 
       a.el.animate([{ transform: oldTransform },{ transform: a.el.style.transform }], { duration: ev.dur||250, easing: cfg.easing, fill:'forwards' }); 
@@ -280,16 +417,22 @@ export async function renderEpisodeVN(root, state, epId, userCfg){
       
       nameEl.textContent = ev.speaker||''; textEl.textContent='';
       const tp={...cfg.typing, ...(ev.type||{})};
-      await typeText(textEl, String(ev.text), tp.speed, tp.skippable!==false);
+      await typeText(textEl, String(ev.text), tp.speed, tp.skippable!==false, skipState);
       (state.ui.epHistory||[]).push({ speaker: ev.speaker||'', text: String(ev.text) });
       const next = events[idx+1];
       const shouldWait = !(next && next.cmd==='choice');
-      if(dialogEl && shouldWait){ await waitAdvance(stage); }
+      if(dialogEl && shouldWait){ await waitAdvance(stage, skipState); }
     },
     async choice(ev){ 
       choicesWrap.innerHTML=''; 
       const items=(ev.items||[]).filter(it=> evalWhen(it.when, state)); 
       if(!items.length) return; 
+      
+      // 선택지에 도달하면 스킵 상태 리셋
+      skipState.skipToChoice = false;
+      skipState.isSkipping = false;
+      btnSkip.textContent = '⏭️ 스킵';
+      btnSkip.style.background = 'rgba(8,12,22,0.8)';
       
       await new Promise(resolve=>{
         items.forEach((it)=>{
@@ -306,7 +449,11 @@ export async function renderEpisodeVN(root, state, epId, userCfg){
         }); 
       }); 
     },
-    async wait(ev){ await wait(Math.max(0, ev.ms||0)); },
+    async wait(ev){ 
+      // 스킵 중이면 대기 시간 무시
+      if(skipState.skipToChoice) return;
+      await wait(Math.max(0, ev.ms||0)); 
+    },
     async sfx(ev){ if(!ev.name) return; const a=getAudio(pathForSfx(cfg, ev.name)); a.currentTime=0; a.play().catch(()=>{}); },
     async bgm(ev){ if(!ev.name) return; const a=getAudio(pathForBgm(cfg, ev.name)); if(ev.stop){ a.pause(); a.currentTime=0; return; } a.loop = ev.loop!==false; a.volume = (typeof ev.volume==='number')? Math.max(0, Math.min(1, ev.volume)) : 1; a.play().catch(()=>{}); },
     async popup(ev){
@@ -333,12 +480,25 @@ export async function renderEpisodeVN(root, state, epId, userCfg){
       popup.appendChild(img);
       currentPopup = img;
       
+      // 스킵 중이면 즉시 표시
+      if(skipState.skipToChoice) {
+        img.style.opacity = '1';
+        return;
+      }
+      
       // 페이드인 애니메이션
       setTimeout(() => { img.style.opacity = '1'; }, 10);
       await wait(ev.dur||300);
     },
     async hidePopup(ev){
       if(!currentPopup) return;
+      
+      // 스킵 중이면 즉시 제거
+      if(skipState.skipToChoice) {
+        currentPopup.remove();
+        currentPopup = null;
+        return;
+      }
       
       currentPopup.style.opacity = '0';
       setTimeout(() => {

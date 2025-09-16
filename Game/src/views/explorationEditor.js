@@ -304,6 +304,7 @@ export function renderExplorationEditorView(root, state) {
           <input class="obj-event-after-title" placeholder="대체 이벤트 제목" value="${obj.eventAfter?.title || ''}" style="flex:1; padding:4px 6px; background:#0f1524; border:1px solid #2b3450; color:#cbd5e1; border-radius:4px;"/>
         </div>
         <textarea class="obj-event-after-text" placeholder="대체 이벤트 내용" style="width:100%; min-height:40px; padding:4px 6px; background:#0f1524; border:1px solid #2b3450; color:#cbd5e1; border-radius:4px; margin-bottom:6px;">${obj.eventAfter?.text || ''}</textarea>
+        <input class="obj-event-after-id" placeholder="에피소드/전투 ID (예: EP-001, BT-100)" value="${obj.eventAfter?.episodeId || obj.eventAfter?.battleId || ''}" style="width:100%; padding:4px 6px; background:#0f1524; border:1px solid #2b3450; color:#cbd5e1; border-radius:4px; margin-bottom:6px;"/>
         
         <textarea class="obj-effects" placeholder="효과 (JSON 배열)" style="width:100%; min-height:40px; padding:4px 6px; background:#0f1524; border:1px solid #2b3450; color:#cbd5e1; border-radius:4px; margin-bottom:6px;">${JSON.stringify(obj.effects || [], null, 2)}</textarea>
         <textarea class="obj-requirements" placeholder="요구조건 (JSON 배열)" style="width:100%; min-height:40px; padding:4px 6px; background:#0f1524; border:1px solid #2b3450; color:#cbd5e1; border-radius:4px;">${JSON.stringify(obj.requirements || [], null, 2)}</textarea>
@@ -325,6 +326,68 @@ export function renderExplorationEditorView(root, state) {
     container.querySelectorAll('input').forEach(input => {
       input.addEventListener('input', () => {
         setTimeout(renderCanvas, 100); // 디바운스
+      });
+    });
+    
+    // 이벤트 타입 변경 시 관련 필드 초기화
+    container.querySelectorAll('.obj-event-type').forEach(select => {
+      select.addEventListener('change', (e) => {
+        const form = e.target.closest('.object-form');
+        const eventIdInput = form.querySelector('.obj-event-id');
+        const eventTitleInput = form.querySelector('.obj-event-title');
+        const eventTextInput = form.querySelector('.obj-event-text');
+        
+        // 이벤트 타입에 따라 placeholder 변경
+        const eventType = e.target.value;
+        if (eventType === 'episode') {
+          eventIdInput.placeholder = '에피소드 ID (예: EP-001)';
+        } else if (eventType === 'battle') {
+          eventIdInput.placeholder = '전투 ID (예: BT-100)';
+        } else if (eventType === 'route') {
+          eventIdInput.placeholder = '루트 ID (예: R-100)';
+        } else {
+          eventIdInput.placeholder = '에피소드/전투 ID (예: EP-001, BT-100)';
+        }
+        
+        // 이벤트 타입이 없으면 관련 필드 초기화
+        if (!eventType) {
+          eventIdInput.value = '';
+          eventTitleInput.value = '';
+          eventTextInput.value = '';
+        }
+        
+        setTimeout(renderCanvas, 100);
+      });
+    });
+    
+    // 대체 이벤트 타입 변경 시 관련 필드 초기화
+    container.querySelectorAll('.obj-event-after-type').forEach(select => {
+      select.addEventListener('change', (e) => {
+        const form = e.target.closest('.object-form');
+        const eventAfterIdInput = form.querySelector('.obj-event-after-id');
+        const eventAfterTitleInput = form.querySelector('.obj-event-after-title');
+        const eventAfterTextInput = form.querySelector('.obj-event-after-text');
+        
+        // 대체 이벤트 타입에 따라 placeholder 변경
+        const eventAfterType = e.target.value;
+        if (eventAfterType === 'episode') {
+          eventAfterIdInput.placeholder = '에피소드 ID (예: EP-001)';
+        } else if (eventAfterType === 'battle') {
+          eventAfterIdInput.placeholder = '전투 ID (예: BT-100)';
+        } else if (eventAfterType === 'route') {
+          eventAfterIdInput.placeholder = '루트 ID (예: R-100)';
+        } else {
+          eventAfterIdInput.placeholder = '에피소드/전투 ID (예: EP-001, BT-100)';
+        }
+        
+        // 대체 이벤트 타입이 없으면 관련 필드 초기화
+        if (!eventAfterType) {
+          eventAfterIdInput.value = '';
+          eventAfterTitleInput.value = '';
+          eventAfterTextInput.value = '';
+        }
+        
+        setTimeout(renderCanvas, 100);
       });
     });
   }
@@ -370,6 +433,16 @@ export function renderExplorationEditorView(root, state) {
           title: form.querySelector('.obj-event-after-title').value || '',
           text: form.querySelector('.obj-event-after-text').value || ''
         };
+        
+        // 대체 이벤트 에피소드/전투 ID 추가
+        const eventAfterId = form.querySelector('.obj-event-after-id').value;
+        if (eventAfterId) {
+          if (eventAfterType === 'episode') {
+            obj.eventAfter.episodeId = eventAfterId;
+          } else if (eventAfterType === 'battle') {
+            obj.eventAfter.battleId = eventAfterId;
+          }
+        }
       }
       
       // 효과 수집

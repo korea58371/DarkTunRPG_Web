@@ -7,8 +7,8 @@ export const EXPLORATIONS = {
     "objects": [
       {
         "id": "strange_sound",
-        "x": 31,
-        "y": 32,
+        "x": 66,
+        "y": 57,
         "width": 213,
         "height": 126,
         "image": "",
@@ -19,7 +19,7 @@ export const EXPLORATIONS = {
           "text": "크르릉... 무언가 위험한 소리가 들려온다."
         },
         "eventAfter": {
-          "type": "message", 
+          "type": "message",
           "title": "조용해진 곳",
           "text": "이제 조용하다. 더 이상 소리가 들리지 않는다."
         },
@@ -42,12 +42,15 @@ export const EXPLORATIONS = {
         "tooltip": "그림자가 움직이는 곳",
         "event": {
           "type": "episode",
+          "title": "",
+          "text": "",
           "episodeId": "EP-MONSTER-ENCOUNTER"
         },
+        "effects": [],
         "requirements": [
           {
             "type": "flag",
-            "key": "explo.EXPLO-001.sound_heard", 
+            "key": "explo.EXPLO-001.sound_heard",
             "value": true
           }
         ]

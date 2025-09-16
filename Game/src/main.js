@@ -17,14 +17,14 @@ window.BATTLE = BATTLE;
 window.appState = state;
 if (seedSpan) seedSpan.textContent = state.rng.seed;
 
-function render(view){
+async function render(view){
   try{
     if (window.UI_TIP && window.UI_TIP.hideTooltip) window.UI_TIP.hideTooltip();
     console.log('[render]', view);
     app.innerHTML = '';
     switch(view){
       case 'routes': return renderRoutesView(app, state);
-      case 'title': return renderTitleView(app, state, ()=>{
+      case 'title': return renderTitleView(app, state, async ()=>{
         // 회차 시작: 새 시드 부여(한 회차 동안 고정)
         if(typeof window.newRunSeed === 'function'){
           state.rng = window.newRunSeed();
@@ -34,10 +34,10 @@ function render(view){
         try{
           const startRoute = (state.data.routes||[])[0];
           if(startRoute && (startRoute.next||'').startsWith('EP-')){
-            state.ui.currentEpisode = startRoute.next; return render('episode');
+            state.ui.currentEpisode = startRoute.next; return await render('episode');
           }
         }catch{}
-        render('routes');
+        await render('routes');
       });
       case 'party': return renderPartyView(app, state);
       case 'episode': return renderEpisodeView(app, state);
@@ -46,7 +46,7 @@ function render(view){
           const ids = Object.keys(state.data.battles||{});
           state.ui.battle = ids[0] || 'BT-100';
         }
-        return renderBattleView(app, state);
+        return await renderBattleView(app, state);
       case 'skillEditor':
         return renderSkillEditorView(app, state);
       case 'routeEditor':
@@ -60,11 +60,11 @@ function render(view){
 }
 
 document.querySelectorAll('nav button').forEach(btn=>{
-  btn.addEventListener('click',()=>render(btn.dataset.view));
+  btn.addEventListener('click', async ()=> await render(btn.dataset.view));
 });
 
 // 전역 리셋: 배드 엔딩 등에서 호출
-window.resetState = ()=>{
+window.resetState = async ()=>{
   try{
     // 모달 정리
     document.querySelectorAll('.modal-backdrop').forEach(el=>el.remove());
@@ -76,7 +76,7 @@ window.resetState = ()=>{
   Object.keys(state).forEach(k=> delete state[k]);
   Object.assign(state, fresh);
   const seedSpan2 = document.getElementById('seed'); if(seedSpan2) seedSpan2.textContent = state.rng.seed;
-  render('title');
+  await render('title');
 };
 
 // 세션 최초 로드 시 seed 공급기 준비: 새 회차마다 다른 시드
@@ -162,7 +162,7 @@ window.addEventListener('resize', applyGlobalScale);
 window.addEventListener('orientationchange', ()=>{ setTimeout(applyGlobalScale, 50); });
 
 ensureFullscreenAndLandscape();
-render('title');
+(async () => await render('title'))();
 afterRenderAdjust();
 
 window.render = render;

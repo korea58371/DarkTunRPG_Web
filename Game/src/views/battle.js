@@ -1,6 +1,25 @@
-export function renderBattleView(root, state){
+export async function renderBattleView(root, state, skipLoading = false){
   const btid = state.ui.battle || Object.keys(state.data.battles||{})[0] || 'BT-100';
   const bt = state.data.battles[btid];
+  
+  // 전투 중 리렌더링이 아닌 경우에만 로딩 화면 표시
+  if(!skipLoading && (!state.ui.battleState || state.ui.battleState.id !== (bt.id||btid))) {
+    // 로딩 화면 표시
+    const loadingScreen = createLoadingScreen();
+    root.innerHTML = '';
+    root.appendChild(loadingScreen);
+    
+    // 전투 리소스 사전 로딩
+    try {
+      await preloadBattleResources(state, bt, btid);
+    } catch(e) {
+      console.warn('[battle-preload-error]', e);
+    }
+    
+    // 로딩 완료 후 페이드 아웃
+    await fadeOutLoading(loadingScreen);
+  }
+  
   const frame = document.createElement('div');
   frame.className='battle-frame';
   frame.innerHTML = `
@@ -1348,10 +1367,10 @@ export function renderBattleView(root, state){
             { transform: `translate(calc(-50% + ${dx}px), 0) scale(1.05)` },
             { transform: 'translate(-50%, 0) scale(1)' }
           ], { duration: 260, easing:'ease-out' });
-          // 애니메이션 완료 후 기본 이미지로 복귀
+          // 애니메이션 완료 후 즉시 기본 이미지로 복귀 (타이밍 단축)
           anim.addEventListener('finish', ()=>{ 
             try{ 
-              console.debug('[ally-sprite-finish->default]', { unit: B.turnUnit }); 
+              console.debug('[ally-sprite-anim-finish->default]', { unit: B.turnUnit }); 
               applyPortraitState(B.turnUnit, 'default'); 
               actorEl.classList.remove('attacking');
             }catch{} 
@@ -1365,6 +1384,16 @@ export function renderBattleView(root, state){
     B.animating = true;
     let animDelay = animateFromLog();
     await new Promise(r=>setTimeout(r, Math.max(200, animDelay||0)));
+    
+    // 아군 공격 후 스프라이트 상태 복귀 (즉시 처리)
+    if(actorEl && B.allyOrder.includes(B.turnUnit)) {
+      actorEl.classList.remove('attacking');
+      try{ 
+        console.debug('[ally-immediate-after-skill->default]', { unit: B.turnUnit, time: Date.now() }); 
+        applyPortraitState(B.turnUnit, 'default'); 
+      }catch{}
+    }
+    
     await new Promise(r=>setTimeout(r, 500));
     document.querySelectorAll('.unit-slot .hit-badge').forEach(n=>n.remove());
     document.querySelectorAll('.unit-slot .hpbar .pred').forEach(p=>{ p.style.width='0%'; p.style.left='0%'; });
@@ -1372,6 +1401,15 @@ export function renderBattleView(root, state){
     try{ console.debug('[player-performSkill-end]', { unit:B.turnUnit, time: Date.now() }); }catch{}
     // 업그레이드 대기 시, 사용자가 선택할 때까지 멈춘 뒤 남은 이벤트가 있으면 다시 연출
     if(B.awaitingUpgrade){
+      // 업그레이드 대기 전에도 스프라이트 상태 확실히 복귀
+      if(actorEl && B.allyOrder.includes(B.turnUnit)) {
+        actorEl.classList.remove('attacking');
+        try{ 
+          console.debug('[ally-before-upgrade->default]', { unit: B.turnUnit }); 
+          applyPortraitState(B.turnUnit, 'default'); 
+        }catch{}
+      }
+      
       await new Promise(r=>{ B._awaitUpgradeResolve = r; });
       if((B.log||[]).length){
         B.animating = true;
@@ -1450,7 +1488,19 @@ export function renderBattleView(root, state){
       await new Promise(r=>setTimeout(r, 500));
       B.animating = false;
       // 적 턴에도 업그레이드가 발생하면 대기
-      if(B.awaitingUpgrade){ console.debug('[upgrade-wait] start during enemy phase'); await new Promise(r=>{ B._awaitUpgradeResolve = r; }); console.debug('[upgrade-wait] done during enemy phase'); }
+      if(B.awaitingUpgrade){ 
+        // 업그레이드 대기 전에 스프라이트 상태 확실히 복귀
+        if(foeEl){ 
+          foeEl.classList.remove('attacking'); 
+          try{ 
+            console.debug('[enemy-before-upgrade->default]', { unit: attackerId }); 
+            applyPortraitState(attackerId, 'default'); 
+          }catch{} 
+        }
+        console.debug('[upgrade-wait] start during enemy phase'); 
+        await new Promise(r=>{ B._awaitUpgradeResolve = r; }); 
+        console.debug('[upgrade-wait] done during enemy phase'); 
+      }
       // 스킬 처리로 다음 턴 유닛으로 넘어갔으므로 하이라이트 갱신
       setTurnHighlight();
       debugFinish('after-enemy-turn-iteration');
@@ -1459,11 +1509,11 @@ export function renderBattleView(root, state){
     // 애니메이션이 모두 끝난 후에만 리렌더(연출 보존)
     if(!B.refreshScheduled){
       B.refreshScheduled = true;
-      setTimeout(()=>{
+      setTimeout(async ()=>{
         B.refreshScheduled = false;
         debugFinish('enemy-phase-tail');
         if(!window.BATTLE.isBattleFinished(B) && !B.animating){
-          renderBattleView(root, state);
+          await renderBattleView(root, state, true); // 전투 중 리렌더링은 로딩 스킵
         }
       }, 120);
     }
@@ -1578,6 +1628,127 @@ export function renderBattleView(root, state){
       if(btn){ btn.click(); }
     };
   }
+}
+
+// 로딩 화면 생성 함수
+function createLoadingScreen(){
+  const screen = document.createElement('div');
+  screen.className = 'battle-loading-screen';
+  screen.style.cssText = `
+    position: absolute;
+    inset: 0;
+    background: linear-gradient(135deg, #0f1320 0%, #1a2332 50%, #0f1320 100%);
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    z-index: 1000;
+    transition: opacity 0.8s ease-out;
+  `;
+  
+  screen.innerHTML = `
+    <div style="text-align: center; color: #cbd5e1;">
+      <div style="font-size: 32px; margin-bottom: 20px; font-weight: bold;">⚔️ 전투 준비 중</div>
+      <div class="loading-spinner" style="width: 60px; height: 60px; border: 4px solid #2b3450; border-top: 4px solid #5cc8ff; border-radius: 50%; animation: spin 1s linear infinite; margin: 0 auto 20px;"></div>
+      <div id="loadingText" style="font-size: 18px; color: #9aa0a6;">리소스를 불러오는 중...</div>
+      <div id="loadingProgress" style="width: 300px; height: 6px; background: #2b3450; border-radius: 3px; margin-top: 12px; overflow: hidden;">
+        <div id="progressBar" style="width: 0%; height: 100%; background: linear-gradient(90deg, #5cc8ff, #a0ff9e); transition: width 0.3s ease; border-radius: 3px;"></div>
+      </div>
+    </div>
+  `;
+  
+  // 스피너 애니메이션 CSS 추가
+  if(!document.getElementById('loading-spinner-style')) {
+    const style = document.createElement('style');
+    style.id = 'loading-spinner-style';
+    style.textContent = '@keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }';
+    document.head.appendChild(style);
+  }
+  
+  return screen;
+}
+
+// 전투 리소스 사전 로딩 함수
+async function preloadBattleResources(state, bt, btid){
+  const loadingText = document.getElementById('loadingText');
+  const progressBar = document.getElementById('progressBar');
+  
+  const resources = [];
+  let loadedCount = 0;
+  
+  // 배경 이미지 수집
+  if(bt?.bg) {
+    const bgPath = (typeof bt.bg === 'string') 
+      ? (bt.bg.includes('/') ? bt.bg : `assets/bg/${bt.bg}`)
+      : (bt.bg?.path || 'assets/bg/BG_001.png');
+    resources.push({ type: 'bg', url: bgPath, name: '배경' });
+  }
+  
+  // 전투 상태 준비
+  if(!state.ui.battleState || state.ui.battleState.id !== (bt.id||btid)){
+    state.ui.battleState = window.BATTLE.createBattleState(state, bt);
+  }
+  const B = state.ui.battleState;
+  
+  // 모든 유닛의 스프라이트 수집
+  const allUnits = [...(B.allyOrder || []), ...(B.enemyOrder || [])];
+  allUnits.forEach(unitId => {
+    if(!unitId) return;
+    const baseId = unitId.split('@')[0];
+    const unitData = state.data?.units?.[baseId];
+    if(unitData?.sprite) {
+      if(unitData.sprite.base) resources.push({ type: 'sprite', url: unitData.sprite.base, name: `${unitData.name} 기본` });
+      if(unitData.sprite.attack) resources.push({ type: 'sprite', url: unitData.sprite.attack, name: `${unitData.name} 공격` });
+      if(unitData.sprite.hit) resources.push({ type: 'sprite', url: unitData.sprite.hit, name: `${unitData.name} 피격` });
+    }
+  });
+  
+  const totalResources = resources.length;
+  if(totalResources === 0) return;
+  
+  // 병렬 로딩
+  const loadPromises = resources.map(async (resource, index) => {
+    try {
+      const img = new Image();
+      await new Promise((resolve, reject) => {
+        img.onload = resolve;
+        img.onerror = reject;
+        img.src = resource.url;
+      });
+      
+      loadedCount++;
+      const progress = (loadedCount / totalResources) * 100;
+      
+      // UI 업데이트
+      if(loadingText) loadingText.textContent = `${resource.name} 로딩 완료... (${loadedCount}/${totalResources})`;
+      if(progressBar) progressBar.style.width = `${progress}%`;
+      
+      console.debug('[resource-loaded]', resource.name, `${loadedCount}/${totalResources}`);
+    } catch(e) {
+      console.warn('[resource-load-failed]', resource.name, e);
+      loadedCount++; // 실패해도 진행
+      const progress = (loadedCount / totalResources) * 100;
+      if(progressBar) progressBar.style.width = `${progress}%`;
+    }
+  });
+  
+  await Promise.all(loadPromises);
+  
+  if(loadingText) loadingText.textContent = '로딩 완료!';
+  await new Promise(r => setTimeout(r, 300)); // 완료 메시지 잠시 표시
+}
+
+// 로딩 화면 페이드 아웃
+async function fadeOutLoading(loadingScreen){
+  return new Promise(resolve => {
+    loadingScreen.style.opacity = '0';
+    setTimeout(() => {
+      if(loadingScreen.parentElement) {
+        loadingScreen.remove();
+      }
+      resolve();
+    }, 800); // 0.8초 페이드 아웃
+  });
 }
 
 // remove cheat panel when leaving battle (expose cleanup)

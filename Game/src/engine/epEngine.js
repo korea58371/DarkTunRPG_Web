@@ -6,7 +6,8 @@ import { applyEffects } from './rules.js';
 export const EP_DEFAULT_CFG = {
   assets: {
     bgPath: 'assets/bg/',
-    charPath: 'assets/char/',
+    charPath: 'assets/cha/',
+    popupPath: 'assets/popup/',
     sfxPath: 'assets/sfx/',
     bgmPath: 'assets/bgm/'
   },
@@ -16,18 +17,13 @@ export const EP_DEFAULT_CFG = {
   scale: 1
 };
 
-// Normalize legacy EP {scene, choices} to DSL {events}
+// All episodes are now in DSL format
 export function normalizeEpisode(ep){
   if(!ep) return { events: [] };
   if(Array.isArray(ep.events)) return ep;
-  const events = [];
-  (ep.scene||[]).forEach(l=>{
-    events.push({ cmd:'say', speaker: l.speaker, text: l.text });
-  });
-  if(Array.isArray(ep.choices) && ep.choices.length){
-    events.push({ cmd:'choice', items: ep.choices.map(c=>({ label:c.label, effects:c.effects||[], next:c.next||'' })) });
-  }
-  return { events };
+  // Legacy format is no longer supported - all episodes should be converted to DSL
+  console.warn('Legacy episode format detected - please convert to DSL format');
+  return { events: [] };
 }
 
 // Evaluate when condition
@@ -52,13 +48,15 @@ function injectStylesOnce(){
   .ep-vn.panel { max-width:none; padding:0; margin:0; border:none; background:transparent; }
   .ep-fit { position:absolute; inset:0; display:flex; align-items:center; justify-content:center; overflow:hidden; }
   .ep-stage { position:relative; width:1920px; height:1080px; transform-origin:50% 50%; }
-  .ep-vn .layer-bg { position:absolute; inset:0; background:#0b0f1a center/cover no-repeat; }
-  .ep-vn .layer-actors { position:absolute; inset:0; pointer-events:none; }
+  .ep-vn .layer-bg { position:absolute; inset:0; background:#0b0f1a center/cover no-repeat; z-index:1; }
+  .ep-vn .layer-popup { position:absolute; inset:0; pointer-events:none; z-index:2; display:flex; align-items:center; justify-content:center; }
+  .ep-vn .layer-actors { position:absolute; inset:0; pointer-events:none; z-index:3; }
   .ep-vn .actor { position:absolute; transform-origin:50% 100%; }
-  .ep-vn .layer-ui { position:absolute; left:0; right:0; bottom:0; padding:24px 48px 96px; pointer-events:none; }
-  .ep-vn .dialog { background:rgba(8,12,22,0.75); border:1px solid #2b3450; border-radius:14px; padding:18px 22px; color:#cbd5e1; max-width:1600px; margin:0 auto; font-size:26px; line-height:1.5; pointer-events:auto; will-change:transform; transform:translateZ(0); }
-  .ep-vn .dialog .name { font-weight:700; color:#e6f1ff; margin-bottom:8px; font-size:28px; }
-  .ep-vn .choices { position:absolute; left:50%; top:50%; transform:translate(-50%,-50%); display:flex; flex-direction:column; gap:16px; align-items:center; justify-content:center; }
+  .ep-vn .popup-img { max-width:80%; max-height:80%; object-fit:contain; opacity:0; transition:opacity 0.3s ease; }
+  .ep-vn .layer-ui { position:absolute; left:0; right:0; bottom:0; padding:24px 48px 48px; pointer-events:none; z-index:4; }
+  .ep-vn .dialog { background:rgba(8,12,22,0.85); border:1px solid #2b3450; border-radius:14px; padding:36px 44px; color:#cbd5e1; max-width:1600px; margin:0 auto; font-size:32px; line-height:1.6; pointer-events:auto; will-change:transform; transform:translateZ(0); min-height:240px; }
+  .ep-vn .dialog .name { font-weight:700; color:#e6f1ff; margin-bottom:12px; font-size:36px; }
+  .ep-vn .choices { position:absolute; left:50%; top:50%; transform:translate(-50%,-50%); display:flex; flex-direction:column; gap:16px; align-items:center; justify-content:center; z-index:10; pointer-events:auto; }
   .ep-vn .choices .btn { font-size:28px; padding:14px 28px; min-width:420px; }
   .ep-vn .history-btn { position:absolute; right:12px; bottom:180px; }
   .ep-vn .modal-backdrop { position:fixed; inset:0; background:rgba(0,0,0,0.5); display:flex; align-items:center; justify-content:center; }
@@ -80,9 +78,14 @@ function getAudio(url){
 }
 
 function pathForChar(cfg, id, emotion){
+  // story 폴더 또는 직접 파일 경로 지원
+  if (id.includes('/')) {
+    return `${cfg.assets.charPath}${id}.png`;
+  }
   return `${cfg.assets.charPath}${id}/${emotion||'default'}.png`;
 }
 function pathForBg(cfg, name){ return `${cfg.assets.bgPath}${name}.png`; }
+function pathForPopup(cfg, name){ return `${cfg.assets.popupPath}${name}.png`; }
 function pathForSfx(cfg, name){ return `${cfg.assets.sfxPath}${name}.ogg`; }
 function pathForBgm(cfg, name){ return `${cfg.assets.bgmPath}${name}.ogg`; }
 
@@ -168,10 +171,10 @@ export async function renderEpisodeVN(root, state, epId, userCfg){
   const wrap=document.createElement('section'); wrap.className='panel ep-vn';
   const fit=document.createElement('div'); fit.className='ep-fit'; wrap.appendChild(fit);
   const stage=document.createElement('div'); stage.className='ep-stage'; fit.appendChild(stage);
-  stage.innerHTML = `<div class="layer-bg" id="epBg"></div><div class="layer-actors" id="epActors"></div><div class="layer-ui"><div class="dialog" id="epDialog"><div class="name" id="epName"></div><div class="text" id="epText"></div></div></div>`;
+  stage.innerHTML = `<div class="layer-bg" id="epBg"></div><div class="layer-popup" id="epPopup"></div><div class="layer-actors" id="epActors"></div><div class="layer-ui"><div class="dialog" id="epDialog" style="display:none;"><div class="name" id="epName"></div><div class="text" id="epText"></div></div></div>`;
   // ensure visible initial background (solid color) until first bg event
   stage.querySelector('#epBg').style.background = '#0b0f1a';
-  const bg=stage.querySelector('#epBg'); const actors=stage.querySelector('#epActors'); const nameEl=stage.querySelector('#epName'); const textEl=stage.querySelector('#epText');
+  const bg=stage.querySelector('#epBg'); const popup=stage.querySelector('#epPopup'); const actors=stage.querySelector('#epActors'); const nameEl=stage.querySelector('#epName'); const textEl=stage.querySelector('#epText');
   const choicesWrap=document.createElement('div'); choicesWrap.className='choices'; stage.appendChild(choicesWrap);
   const btnHistory=document.createElement('button'); btnHistory.className='btn history-btn'; btnHistory.textContent='히스토리'; stage.appendChild(btnHistory);
   state.ui = state.ui || {}; state.ui.epHistory = state.ui.epHistory || [];
@@ -185,33 +188,167 @@ export async function renderEpisodeVN(root, state, epId, userCfg){
 
   // Actor registry
   const actorMap = new Map();
+  let currentPopup = null;
+  
   const ensureActor=(id)=>{
     if(actorMap.has(id)) return actorMap.get(id);
-    const el=document.createElement('img'); el.className='actor'; el.style.left='50%'; el.style.bottom='0'; el.style.transform='translate(-50%,0) scale(1)'; actors.appendChild(el); const a={el, id, emotion:'default', x:0.5, y:1.0, scale:1}; actorMap.set(id,a); return a;
+    const el=document.createElement('img'); el.className='actor'; el.style.left='50%'; el.style.bottom='0'; el.style.transform='translate(-50%,0) scale(1)'; actors.appendChild(el); const a={el, id, emotion:'default', x:0.5, y:1.0, scale:1, offsetX:0, offsetY:0}; actorMap.set(id,a); return a;
   };
-  const place=(a)=>{ const px=(a.x*100).toFixed(2)+'%'; a.el.style.left=px; a.el.style.bottom=((a.y-1)*100).toFixed(2)+'%'; a.el.style.transform=`translate(-50%,0) scale(${a.scale})`; };
+  
+  const place=(a)=>{ 
+    const px=((a.x*100) + a.offsetX).toFixed(2)+'%'; 
+    const py=(((a.y-1)*100) + a.offsetY).toFixed(2)+'%';
+    a.el.style.left=px; 
+    a.el.style.bottom=py; 
+    a.el.style.transform=`translate(-50%,0) scale(${a.scale})`; 
+  };
 
   // Command handlers
   const events = ep.events||[];
   const handlers={
-    async bg(ev){ if(!ev.name) return; const url=pathForBg(cfg, ev.name); try{ await loadImage(url); }catch{} bg.style.backgroundImage = `url('${url}')`; },
-    async show(ev){ const id=ev.id; if(!id) return; const a=ensureActor(id); a.emotion=ev.emotion||'default'; a.el.src = pathForChar(cfg, id, a.emotion); if(ev.side){ a.x = ev.side==='left'? 0.2 : ev.side==='center'? 0.5 : 0.8; } if(ev.pos){ if(typeof ev.pos.x==='number') a.x=ev.pos.x; if(typeof ev.pos.y==='number') a.y=ev.pos.y; if(typeof ev.pos.scale==='number') a.scale=ev.pos.scale; } place(a); a.el.style.opacity='0'; a.el.animate([{opacity:0, transform:`translate(-50%,0) scale(${a.scale*0.95})`},{opacity:1, transform:`translate(-50%,0) scale(${a.scale})`}], { duration: ev.dur||250, easing: cfg.easing, fill:'forwards' }); await wait(ev.dur||250); },
+    async bg(ev){ 
+      if(!ev.name) return; 
+      const url=pathForBg(cfg, ev.name); 
+      try{ await loadImage(url); }catch{} 
+      // 페이드 효과와 함께 배경 변경
+      const newBg = document.createElement('div');
+      newBg.style.cssText = `position:absolute; inset:0; background-image:url('${url}'); background-size:cover; background-position:center; opacity:0; transition:opacity ${ev.dur||500}ms ease;`;
+      bg.appendChild(newBg);
+      // 애니메이션 시작
+      setTimeout(() => { newBg.style.opacity = '1'; }, 10);
+      // 이전 배경들 정리 (새 배경이 완전히 나타난 후)
+      setTimeout(() => {
+        while(bg.children.length > 1) {
+          bg.removeChild(bg.firstChild);
+        }
+      }, (ev.dur||500) + 50);
+      await wait(ev.dur||500);
+    },
+    async show(ev){ 
+      const id=ev.id; if(!id) return; 
+      const a=ensureActor(id); 
+      a.emotion=ev.emotion||'default'; 
+      
+      // 캐릭터 이미지 경로 설정 (story 폴더 지원)
+      const charPath = id.includes('/') ? pathForChar(cfg, id) : pathForChar(cfg, id, a.emotion);
+      a.el.src = charPath;
+      
+      // 위치 설정 (side, pos, offset 지원)
+      if(ev.side){ 
+        a.x = ev.side==='left'? 0.2 : ev.side==='center'? 0.5 : ev.side==='right'? 0.8 : 0.5; 
+      }
+      if(ev.pos){ 
+        if(typeof ev.pos.x==='number') a.x=ev.pos.x; 
+        if(typeof ev.pos.y==='number') a.y=ev.pos.y; 
+        if(typeof ev.pos.scale==='number') a.scale=ev.pos.scale; 
+      }
+      if(ev.offset){
+        if(typeof ev.offset.x==='number') a.offsetX=ev.offset.x;
+        if(typeof ev.offset.y==='number') a.offsetY=ev.offset.y;
+      }
+      
+      place(a); 
+      a.el.style.opacity='0'; 
+      a.el.animate([{opacity:0, transform:`translate(-50%,0) scale(${a.scale*0.95})`},{opacity:1, transform:`translate(-50%,0) scale(${a.scale})`}], { duration: ev.dur||250, easing: cfg.easing, fill:'forwards' }); 
+      await wait(ev.dur||250); 
+    },
     async hide(ev){ const id=ev.id; const a=actorMap.get(id); if(!a) return; a.el.animate([{opacity:1},{opacity:0}], { duration: ev.dur||200, easing: cfg.easing, fill:'forwards' }); await wait(ev.dur||200); a.el.remove(); actorMap.delete(id); },
-    async move(ev){ const id=ev.id; const a=actorMap.get(id); if(!a) return; if(ev.pos){ if(typeof ev.pos.x==='number') a.x=ev.pos.x; if(typeof ev.pos.y==='number') a.y=ev.pos.y; if(typeof ev.pos.scale==='number') a.scale=ev.pos.scale; } const start = a.el.getBoundingClientRect(); place(a); const end = a.el.getBoundingClientRect(); a.el.animate([{ transform:a.el.style.transform },{ transform:`translate(-50%,0) scale(${a.scale})` }], { duration: ev.dur||250, easing: cfg.easing, fill:'forwards' }); await wait(ev.dur||250); },
+    async move(ev){ 
+      const id=ev.id; const a=actorMap.get(id); if(!a) return; 
+      if(ev.pos){ 
+        if(typeof ev.pos.x==='number') a.x=ev.pos.x; 
+        if(typeof ev.pos.y==='number') a.y=ev.pos.y; 
+        if(typeof ev.pos.scale==='number') a.scale=ev.pos.scale; 
+      }
+      if(ev.offset){
+        if(typeof ev.offset.x==='number') a.offsetX=ev.offset.x;
+        if(typeof ev.offset.y==='number') a.offsetY=ev.offset.y;
+      }
+      const oldTransform = a.el.style.transform;
+      place(a); 
+      a.el.animate([{ transform: oldTransform },{ transform: a.el.style.transform }], { duration: ev.dur||250, easing: cfg.easing, fill:'forwards' }); 
+      await wait(ev.dur||250); 
+    },
     async say(ev, idx){
-      if(!ev.text) return; nameEl.textContent = ev.speaker||''; textEl.textContent='';
+      if(!ev.text) return; 
+      
+      // 첫 번째 대사가 나올 때 대사창 표시
+      const dialogEl = stage.querySelector('#epDialog');
+      if(dialogEl && dialogEl.style.display === 'none') {
+        dialogEl.style.display = 'block';
+      }
+      
+      nameEl.textContent = ev.speaker||''; textEl.textContent='';
       const tp={...cfg.typing, ...(ev.type||{})};
       await typeText(textEl, String(ev.text), tp.speed, tp.skippable!==false);
       (state.ui.epHistory||[]).push({ speaker: ev.speaker||'', text: String(ev.text) });
-      const dialogEl = textEl.closest('#epDialog') || textEl.parentElement;
       const next = events[idx+1];
       const shouldWait = !(next && next.cmd==='choice');
       if(dialogEl && shouldWait){ await waitAdvance(stage); }
     },
-    async choice(ev){ choicesWrap.innerHTML=''; const items=(ev.items||[]).filter(it=> evalWhen(it.when, state)); if(!items.length) return; await new Promise(resolve=>{ items.forEach((it)=>{ const b=document.createElement('button'); b.className='btn'; b.textContent=it.label||'...'; b.onclick=()=>{ try{ applyEffects(state, it.effects||[]); }catch{} choicesWrap.innerHTML=''; navigateAfter(state, it.next||''); resolve(); }; choicesWrap.appendChild(b); }); }); },
+    async choice(ev){ 
+      choicesWrap.innerHTML=''; 
+      const items=(ev.items||[]).filter(it=> evalWhen(it.when, state)); 
+      if(!items.length) return; 
+      
+      await new Promise(resolve=>{
+        items.forEach((it)=>{
+          const b=document.createElement('button'); 
+          b.className='btn'; 
+          b.textContent=it.label||'...'; 
+          b.onclick=()=>{ 
+            try{ applyEffects(state, it.effects||[]); }catch{} 
+            choicesWrap.innerHTML=''; 
+            navigateAfter(state, it.next||''); 
+            resolve(); 
+          }; 
+          choicesWrap.appendChild(b); 
+        }); 
+      }); 
+    },
     async wait(ev){ await wait(Math.max(0, ev.ms||0)); },
     async sfx(ev){ if(!ev.name) return; const a=getAudio(pathForSfx(cfg, ev.name)); a.currentTime=0; a.play().catch(()=>{}); },
-    async bgm(ev){ if(!ev.name) return; const a=getAudio(pathForBgm(cfg, ev.name)); if(ev.stop){ a.pause(); a.currentTime=0; return; } a.loop = ev.loop!==false; a.volume = (typeof ev.volume==='number')? Math.max(0, Math.min(1, ev.volume)) : 1; a.play().catch(()=>{}); }
+    async bgm(ev){ if(!ev.name) return; const a=getAudio(pathForBgm(cfg, ev.name)); if(ev.stop){ a.pause(); a.currentTime=0; return; } a.loop = ev.loop!==false; a.volume = (typeof ev.volume==='number')? Math.max(0, Math.min(1, ev.volume)) : 1; a.play().catch(()=>{}); },
+    async popup(ev){
+      if(!ev.name) return;
+      const url = pathForPopup(cfg, ev.name);
+      try{ await loadImage(url); }catch{}
+      
+      // 기존 팝업 제거
+      if(currentPopup){
+        currentPopup.remove();
+        currentPopup = null;
+      }
+      
+      const img = document.createElement('img');
+      img.className = 'popup-img';
+      img.src = url;
+      
+      // 크기 및 위치 설정
+      if(ev.size){
+        if(typeof ev.size.width === 'string') img.style.maxWidth = ev.size.width;
+        if(typeof ev.size.height === 'string') img.style.maxHeight = ev.size.height;
+      }
+      
+      popup.appendChild(img);
+      currentPopup = img;
+      
+      // 페이드인 애니메이션
+      setTimeout(() => { img.style.opacity = '1'; }, 10);
+      await wait(ev.dur||300);
+    },
+    async hidePopup(ev){
+      if(!currentPopup) return;
+      
+      currentPopup.style.opacity = '0';
+      setTimeout(() => {
+        if(currentPopup){
+          currentPopup.remove();
+          currentPopup = null;
+        }
+      }, ev.dur||300);
+      await wait(ev.dur||300);
+    }
   };
 
   function wait(ms){ return new Promise(r=> setTimeout(r, ms)); }
@@ -220,7 +357,11 @@ export async function renderEpisodeVN(root, state, epId, userCfg){
     try{
       const imgs=[]; (ep.events||[]).forEach(ev=>{
         if(ev.cmd==='bg' && ev.name){ imgs.push(loadImage(pathForBg(cfg, ev.name))); }
-        if(ev.cmd==='show' && ev.id){ imgs.push(loadImage(pathForChar(cfg, ev.id, ev.emotion||'default'))); }
+        if(ev.cmd==='show' && ev.id){ 
+          const charPath = ev.id.includes('/') ? pathForChar(cfg, ev.id) : pathForChar(cfg, ev.id, ev.emotion||'default');
+          imgs.push(loadImage(charPath)); 
+        }
+        if(ev.cmd==='popup' && ev.name){ imgs.push(loadImage(pathForPopup(cfg, ev.name))); }
       }); await Promise.all(imgs);
     }catch{}
   }

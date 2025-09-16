@@ -139,27 +139,16 @@ export function renderRouteEditorView(root, state){
     // EP/BT 인라인 버튼 바인딩
     if((r.next||'').startsWith('EP-')){
       const epId = r.next;
-      const btnLine = formEl.querySelector('#btnEpAddLine');
-      const btnChoice = formEl.querySelector('#btnEpAddChoice');
-      const btnParty = formEl.querySelector('#btnEpAddParty');
-      if(btnLine){ btnLine.onclick=()=>{ const host=formEl.querySelector('#epScene'); const idx=host.querySelectorAll('.row').length; const div=document.createElement('div'); div.innerHTML=epLineRow({speaker:'', text:''}, idx); host.appendChild(div.firstChild); bindEpRowDeletes(); } }
-      if(btnChoice){ btnChoice.onclick=()=>{ const host=formEl.querySelector('#epChoices'); const idx=host.querySelectorAll('.row').length; const div=document.createElement('div'); div.innerHTML=epChoiceRow({label:'', next:'', effects:[]}, idx); host.appendChild(div.firstChild); bindChoiceRowDeletes(); attachChoiceTemplateHandlers(); } }
-      if(btnParty){ btnParty.onclick=()=>{ const host=formEl.querySelector('#epChoices'); const idx=host.querySelectorAll('.row').length; const unitId = (buildUnitOptions()[0]?.id)||'C-001'; const choice = { label:'동료 합류', next:'', effects:[{ type:'party.add', unit: unitId }] }; const div=document.createElement('div'); div.innerHTML=epChoiceRow(choice, idx); host.appendChild(div.firstChild); bindChoiceRowDeletes(); attachChoiceTemplateHandlers(); } }
-      bindEpRowDeletes(); bindChoiceRowDeletes(); attachChoiceTemplateHandlers();
+      const ep = episodes[epId] || { events: [] };
+      
+      // 모든 에피소드는 DSL 형식
+      bindDslButtons();
+      
+      // 효과 저장소 초기화
+      initializeEffectsStorage(ep.events || []);
     }
     // 전투의 승/패 EP 인라인 편집 버튼 바인딩
-    const btnWinL = formEl.querySelector('#btnEpWinAddLine');
-    const btnWinC = formEl.querySelector('#btnEpWinAddChoice');
-    const btnWinP = formEl.querySelector('#btnEpWinAddParty');
-    if(btnWinL){ btnWinL.onclick=()=>{ const host=formEl.querySelector('#epWinScene'); const idx=host.querySelectorAll('.row').length; const div=document.createElement('div'); div.innerHTML=epLineRow({speaker:'', text:''}, idx); host.appendChild(div.firstChild); bindEpRowDeletes(); }; }
-    if(btnWinC){ btnWinC.onclick=()=>{ const host=formEl.querySelector('#epWinChoices'); const idx=host.querySelectorAll('.row').length; const div=document.createElement('div'); div.innerHTML=epChoiceRow({label:'', next:'', effects:[]}, idx); host.appendChild(div.firstChild); bindChoiceRowDeletes(); attachChoiceTemplateHandlers(); }; }
-    if(btnWinP){ btnWinP.onclick=()=>{ const host=formEl.querySelector('#epWinChoices'); const idx=host.querySelectorAll('.row').length; const unitId = (buildUnitOptions()[0]?.id)||'C-001'; const choice = { label:'동료 합류', next:'', effects:[{ type:'party.add', unit: unitId }] }; const div=document.createElement('div'); div.innerHTML=epChoiceRow(choice, idx); host.appendChild(div.firstChild); bindChoiceRowDeletes(); attachChoiceTemplateHandlers(); }; }
-    const btnLoseL = formEl.querySelector('#btnEpLoseAddLine');
-    const btnLoseC = formEl.querySelector('#btnEpLoseAddChoice');
-    const btnLoseP = formEl.querySelector('#btnEpLoseAddParty');
-    if(btnLoseL){ btnLoseL.onclick=()=>{ const host=formEl.querySelector('#epLoseScene'); const idx=host.querySelectorAll('.row').length; const div=document.createElement('div'); div.innerHTML=epLineRow({speaker:'', text:''}, idx); host.appendChild(div.firstChild); bindEpRowDeletes(); }; }
-    if(btnLoseC){ btnLoseC.onclick=()=>{ const host=formEl.querySelector('#epLoseChoices'); const idx=host.querySelectorAll('.row').length; const div=document.createElement('div'); div.innerHTML=epChoiceRow({label:'', next:'', effects:[]}, idx); host.appendChild(div.firstChild); bindChoiceRowDeletes(); attachChoiceTemplateHandlers(); }; }
-    if(btnLoseP){ btnLoseP.onclick=()=>{ const host=formEl.querySelector('#epLoseChoices'); const idx=host.querySelectorAll('.row').length; const unitId = (buildUnitOptions()[0]?.id)||'C-001'; const choice = { label:'동료 합류', next:'', effects:[{ type:'party.add', unit: unitId }] }; const div=document.createElement('div'); div.innerHTML=epChoiceRow(choice, idx); host.appendChild(div.firstChild); bindChoiceRowDeletes(); attachChoiceTemplateHandlers(); }; }
+    bindBattleEpisodeButtons();
   }
   function branchRow(b, i){
     return `<div class="row" data-idx="${i}" style="gap:6px; margin-top:6px;">
@@ -369,11 +358,22 @@ export function renderRouteEditorView(root, state){
     if(!next) return '';
     if(next.startsWith('EP-')){
       const ep = episodes[next] || { scene:[{speaker:'', text:''}], choices:[{label:'', effects:[], next:''}] };
+      const isDSL = Array.isArray(ep.events);
+      
+      // 모든 에피소드는 이제 DSL 형식
       return `<div class="card" style="margin-top:8px;">
-        <div class="row" style="justify-content:space-between; align-items:center;"><strong>에피소드 편집: ${next}</strong><div class="row" style="gap:6px;"><button class="btn" id="btnEpAddLine">행 추가</button><button class="btn" id="btnEpAddChoice">선택 추가</button><button class="btn" id="btnEpAddParty">동료 추가</button></div></div>
-        <div id="epScene">${(ep.scene||[]).map((ln,i)=> epLineRow(ln,i)).join('')}</div>
-        <div style="margin-top:8px;"><strong>선택지</strong></div>
-        <div id="epChoices">${(ep.choices||[]).map((c,i)=> epChoiceRow(c,i)).join('')}</div>
+        <div class="row" style="justify-content:space-between; align-items:center;">
+          <strong>에피소드 편집: ${next}</strong>
+          <div class="row" style="gap:6px;">
+            <button class="btn" id="btnDslAddBg">배경</button>
+            <button class="btn" id="btnDslAddShow">캐릭터 표시</button>
+            <button class="btn" id="btnDslAddSay">대사</button>
+            <button class="btn" id="btnDslAddChoice">선택지</button>
+            <button class="btn" id="btnDslAddPopup">팝업</button>
+            <button class="btn" id="btnDslAddMove">이동</button>
+          </div>
+        </div>
+        <div id="dslEvents" style="max-height:400px; overflow-y:auto; border:1px solid #2b3450; border-radius:6px; padding:8px; margin-top:8px;">${(ep.events||[]).map((ev,i)=> dslEventRow(ev,i)).join('')}</div>
       </div>`;
     }
     if(next.startsWith('BT-')){
@@ -394,16 +394,36 @@ export function renderRouteEditorView(root, state){
       const loseEpId = (loseNext||'').startsWith('EP-') ? loseNext : '';
       const winEp = winEpId ? (episodes[winEpId] || { scene:[{speaker:'', text:''}], choices:[{label:'', effects:[], next:''}] }) : null;
       const loseEp = loseEpId ? (episodes[loseEpId] || { scene:[{speaker:'', text:''}], choices:[{label:'', effects:[], next:''}] }) : null;
-      const epBlock=(prefix, title, epId, ep)=>{
+      
+      // DSL 형식 지원
+      const isWinDSL = winEp && Array.isArray(winEp.events);
+      const isLoseDSL = loseEp && Array.isArray(loseEp.events);
+      const epBlock=(prefix, title, epId, ep, isDSL)=>{
         if(!epId) return '';
-        const sceneHtml = (ep.scene||[]).map((ln,i)=> epLineRow(ln,i)).join('');
-        const choiceHtml = (ep.choices||[]).map((c,i)=> epChoiceRow(c,i)).join('');
-        return `<div class="card" style="margin-top:8px;">
-          <div class="row" style="justify-content:space-between; align-items:center;"><strong>${title}: ${epId}</strong><div class="row" style="gap:6px;"><button class="btn" id="btnEp${prefix}AddLine">행 추가</button><button class="btn" id="btnEp${prefix}AddChoice">선택 추가</button><button class="btn" id="btnEp${prefix}AddParty">동료 추가</button></div></div>
-          <div id="ep${prefix}Scene">${sceneHtml}</div>
-          <div style="margin-top:8px;"><strong>선택지</strong></div>
-          <div id="ep${prefix}Choices">${choiceHtml}</div>
-        </div>`;
+        
+        if(isDSL){
+          const eventsHtml = (ep.events||[]).map((ev,i)=> dslEventRow(ev,i)).join('');
+          return `<div class="card" style="margin-top:8px;">
+            <div class="row" style="justify-content:space-between; align-items:center;">
+              <strong>${title} (DSL): ${epId}</strong>
+              <div class="row" style="gap:6px;">
+                <button class="btn" id="btnEp${prefix}DslAddBg">배경</button>
+                <button class="btn" id="btnEp${prefix}DslAddSay">대사</button>
+                <button class="btn" id="btnEp${prefix}DslAddChoice">선택지</button>
+              </div>
+            </div>
+            <div id="ep${prefix}DslEvents" style="max-height:300px; overflow-y:auto; border:1px solid #2b3450; border-radius:6px; padding:8px; margin-top:8px;">${eventsHtml}</div>
+          </div>`;
+        } else {
+          const sceneHtml = (ep.scene||[]).map((ln,i)=> epLineRow(ln,i)).join('');
+          const choiceHtml = (ep.choices||[]).map((c,i)=> epChoiceRow(c,i)).join('');
+          return `<div class="card" style="margin-top:8px;">
+            <div class="row" style="justify-content:space-between; align-items:center;"><strong>${title}: ${epId}</strong><div class="row" style="gap:6px;"><button class="btn" id="btnEp${prefix}AddLine">행 추가</button><button class="btn" id="btnEp${prefix}AddChoice">선택 추가</button><button class="btn" id="btnEp${prefix}AddParty">동료 추가</button></div></div>
+            <div id="ep${prefix}Scene" style="max-height:250px; overflow-y:auto; border:1px solid #2b3450; border-radius:6px; padding:8px; margin-top:8px;">${sceneHtml}</div>
+            <div style="margin-top:8px;"><strong>선택지</strong></div>
+            <div id="ep${prefix}Choices" style="max-height:150px; overflow-y:auto; border:1px solid #2b3450; border-radius:6px; padding:8px; margin-top:4px;">${choiceHtml}</div>
+          </div>`;
+        }
       };
       return `<div class="card" style="margin-top:8px;">
         <div class="row" style="justify-content:space-between; align-items:center;"><strong>전투 편집: ${next}</strong></div>
@@ -412,8 +432,8 @@ export function renderRouteEditorView(root, state){
         ${inputRow('패배(next)','bt_lose', loseNext)}
         <div style="margin-top:8px;"><strong>3x3 배치</strong></div>
         <div id="btBoard" class="col" style="gap:6px;">${board}</div>
-        ${epBlock('Win', '승리 에피소드 편집', winEpId, winEp)}
-        ${epBlock('Lose', '패배 에피소드 편집', loseEpId, loseEp)}
+        ${epBlock('Win', '승리 에피소드 편집', winEpId, winEp, isWinDSL)}
+        ${epBlock('Lose', '패배 에피소드 편집', loseEpId, loseEp, isLoseDSL)}
       </div>`;
     }
     return `<div class="card" style="margin-top:8px;"><strong>엔딩/특수: ${next}</strong><div style="color:#9aa0a6; margin-top:4px;">특별한 편집 요소는 없습니다.</div></div>`;
@@ -462,11 +482,80 @@ export function renderRouteEditorView(root, state){
   }
   function readInlineEpisode(epId){
     const host = formEl; if(!host) return null; if(!epId || !epId.startsWith('EP-')) return null;
-    const sceneRows = Array.from(host.querySelectorAll('#epScene .row'));
-    const scene = sceneRows.map(r=>({ speaker: r.querySelector('.ep_speaker')?.value||'', text: r.querySelector('.ep_text')?.value||'' }));
-    const choiceRows = Array.from(host.querySelectorAll('#epChoices .row'));
-    const choices = choiceRows.map(r=>{ let effects=[]; const raw=r.querySelector('.ep_effects')?.value||'[]'; try{ const v=JSON.parse(raw); if(Array.isArray(v)) effects=v; }catch{} return { label: r.querySelector('.ep_label')?.value||'', next: r.querySelector('.ep_next')?.value||'', effects }; });
-    return { scene, choices };
+    
+    // DSL 형식인지 확인
+    const dslHost = host.querySelector('#dslEvents');
+    if(dslHost){
+      // DSL 형식에서 events 수집
+      const eventRows = Array.from(dslHost.querySelectorAll('.dsl-event'));
+      const events = eventRows.map(row => {
+        const cmd = row.querySelector('.dsl_cmd')?.value || '';
+        const eventData = { cmd };
+        
+        // 각 명령어별 데이터 수집
+        switch(cmd){
+          case 'bg':
+            eventData.name = row.querySelector('.dsl_bg_name')?.value || '';
+            eventData.dur = Number(row.querySelector('.dsl_bg_dur')?.value || 500);
+            break;
+          case 'show':
+            eventData.id = row.querySelector('.dsl_show_id')?.value || '';
+            eventData.side = row.querySelector('.dsl_show_side')?.value || 'center';
+            eventData.dur = Number(row.querySelector('.dsl_show_dur')?.value || 250);
+            const offsetX = row.querySelector('.dsl_show_offset_x')?.value;
+            const offsetY = row.querySelector('.dsl_show_offset_y')?.value;
+            if(offsetX || offsetY){
+              eventData.offset = { x: Number(offsetX || 0), y: Number(offsetY || 0) };
+            }
+            break;
+          case 'say':
+            eventData.speaker = row.querySelector('.dsl_say_speaker')?.value || '';
+            eventData.text = row.querySelector('.dsl_say_text')?.value || '';
+            break;
+          case 'choice':
+            const choiceContainer = row.querySelector('.choice-container');
+            if(choiceContainer) {
+              eventData.items = collectChoiceData(choiceContainer);
+            } else {
+              eventData.items = [];
+            }
+            break;
+          case 'popup':
+            eventData.name = row.querySelector('.dsl_popup_name')?.value || '';
+            eventData.dur = Number(row.querySelector('.dsl_popup_dur')?.value || 300);
+            const width = row.querySelector('.dsl_popup_width')?.value;
+            const height = row.querySelector('.dsl_popup_height')?.value;
+            if(width || height){
+              eventData.size = { width: width || '80%', height: height || '80%' };
+            }
+            break;
+          case 'hidePopup':
+            eventData.dur = Number(row.querySelector('.dsl_hide_popup_dur')?.value || 300);
+            break;
+          case 'move':
+            eventData.id = row.querySelector('.dsl_move_id')?.value || '';
+            eventData.side = row.querySelector('.dsl_move_side')?.value || 'center';
+            eventData.dur = Number(row.querySelector('.dsl_move_dur')?.value || 250);
+            const moveOffsetX = row.querySelector('.dsl_move_offset_x')?.value;
+            const moveOffsetY = row.querySelector('.dsl_move_offset_y')?.value;
+            if(moveOffsetX || moveOffsetY){
+              eventData.offset = { x: Number(moveOffsetX || 0), y: Number(moveOffsetY || 0) };
+            }
+            break;
+        }
+        
+        return eventData;
+      }).filter(ev => ev.cmd); // 빈 명령어 제외
+      
+      return { events };
+    } else {
+      // 레거시 형식에서 scene/choices 수집
+      const sceneRows = Array.from(host.querySelectorAll('#epScene .row'));
+      const scene = sceneRows.map(r=>({ speaker: r.querySelector('.ep_speaker')?.value||'', text: r.querySelector('.ep_text')?.value||'' }));
+      const choiceRows = Array.from(host.querySelectorAll('#epChoices .row'));
+      const choices = choiceRows.map(r=>{ let effects=[]; const raw=r.querySelector('.ep_effects')?.value||'[]'; try{ const v=JSON.parse(raw); if(Array.isArray(v)) effects=v; }catch{} return { label: r.querySelector('.ep_label')?.value||'', next: r.querySelector('.ep_next')?.value||'', effects }; });
+      return { scene, choices };
+    }
   }
   function readInlineBattle(btId){
     const host = formEl; if(!host) return null; if(!btId || !btId.startsWith('BT-')) return null;
@@ -486,11 +575,75 @@ export function renderRouteEditorView(root, state){
   // 보조: 전투 내 승/패 EP 인라인 수집
   function readInlineEpisodeForPrefix(prefix){
     try{
-      const sceneRows = Array.from(formEl.querySelectorAll(`#ep${prefix}Scene .row`));
-      const scene = sceneRows.map(r=>({ speaker: r.querySelector('.ep_speaker')?.value||'', text: r.querySelector('.ep_text')?.value||'' }));
-      const choiceRows = Array.from(formEl.querySelectorAll(`#ep${prefix}Choices .row`));
-      const choices = choiceRows.map(r=>{ let effects=[]; const raw=r.querySelector('.ep_effects')?.value||'[]'; try{ const v=JSON.parse(raw); if(Array.isArray(v)) effects=v; }catch{} return { label: r.querySelector('.ep_label')?.value||'', next: r.querySelector('.ep_next')?.value||'', effects }; });
-      return { scene, choices };
+      // DSL 형식 확인
+      const dslHost = formEl.querySelector(`#ep${prefix}DslEvents`);
+      if(dslHost){
+        // DSL 형식에서 events 수집
+        const eventRows = Array.from(dslHost.querySelectorAll('.dsl-event'));
+        const events = eventRows.map(row => {
+          const cmd = row.querySelector('.dsl_cmd')?.value || '';
+          const eventData = { cmd };
+          
+          // 각 명령어별 데이터 수집
+          switch(cmd){
+            case 'bg':
+              eventData.name = row.querySelector('.dsl_bg_name')?.value || '';
+              eventData.dur = Number(row.querySelector('.dsl_bg_dur')?.value || 500);
+              break;
+            case 'show':
+              eventData.id = row.querySelector('.dsl_show_id')?.value || '';
+              eventData.side = row.querySelector('.dsl_show_side')?.value || 'center';
+              eventData.dur = Number(row.querySelector('.dsl_show_dur')?.value || 250);
+              const offsetX = row.querySelector('.dsl_show_offset_x')?.value;
+              const offsetY = row.querySelector('.dsl_show_offset_y')?.value;
+              if(offsetX || offsetY){
+                eventData.offset = { x: Number(offsetX || 0), y: Number(offsetY || 0) };
+              }
+              break;
+            case 'say':
+              eventData.speaker = row.querySelector('.dsl_say_speaker')?.value || '';
+              eventData.text = row.querySelector('.dsl_say_text')?.value || '';
+              break;
+            case 'choice':
+              const choiceText = row.querySelector('.dsl_choice_items')?.value || '[]';
+              try{ eventData.items = JSON.parse(choiceText); }catch{ eventData.items = []; }
+              break;
+            case 'popup':
+              eventData.name = row.querySelector('.dsl_popup_name')?.value || '';
+              eventData.dur = Number(row.querySelector('.dsl_popup_dur')?.value || 300);
+              const width = row.querySelector('.dsl_popup_width')?.value;
+              const height = row.querySelector('.dsl_popup_height')?.value;
+              if(width || height){
+                eventData.size = { width: width || '80%', height: height || '80%' };
+              }
+              break;
+            case 'hidePopup':
+              eventData.dur = Number(row.querySelector('.dsl_hide_popup_dur')?.value || 300);
+              break;
+            case 'move':
+              eventData.id = row.querySelector('.dsl_move_id')?.value || '';
+              eventData.side = row.querySelector('.dsl_move_side')?.value || 'center';
+              eventData.dur = Number(row.querySelector('.dsl_move_dur')?.value || 250);
+              const moveOffsetX = row.querySelector('.dsl_move_offset_x')?.value;
+              const moveOffsetY = row.querySelector('.dsl_move_offset_y')?.value;
+              if(moveOffsetX || moveOffsetY){
+                eventData.offset = { x: Number(moveOffsetX || 0), y: Number(moveOffsetY || 0) };
+              }
+              break;
+          }
+          
+          return eventData;
+        }).filter(ev => ev.cmd); // 빈 명령어 제외
+        
+        return { events };
+      } else {
+        // 레거시 형식에서 scene/choices 수집
+        const sceneRows = Array.from(formEl.querySelectorAll(`#ep${prefix}Scene .row`));
+        const scene = sceneRows.map(r=>({ speaker: r.querySelector('.ep_speaker')?.value||'', text: r.querySelector('.ep_text')?.value||'' }));
+        const choiceRows = Array.from(formEl.querySelectorAll(`#ep${prefix}Choices .row`));
+        const choices = choiceRows.map(r=>{ let effects=[]; const raw=r.querySelector('.ep_effects')?.value||'[]'; try{ const v=JSON.parse(raw); if(Array.isArray(v)) effects=v; }catch{} return { label: r.querySelector('.ep_label')?.value||'', next: r.querySelector('.ep_next')?.value||'', effects }; });
+        return { scene, choices };
+      }
     }catch{ return null; }
   }
 
@@ -632,6 +785,805 @@ export function renderRouteEditorView(root, state){
   }
 
   function walkReq(node, fn){ if(!node) return; fn(node); if(Array.isArray(node.anyOf)) node.anyOf.forEach(n=> walkReq(n, fn)); }
+
+  // 효과 렌더링 함수들
+  function renderEffectsList(effects){
+    if(!effects || !effects.length) return '<div style="color:#9aa0a6; font-style:italic;">효과 없음</div>';
+    
+    return effects.map((effect, idx) => {
+      let description = '';
+      switch(effect.type) {
+        case 'flag.set':
+          description = `플래그: ${effect.key} = ${effect.value}`;
+          break;
+        case 'party.add':
+          description = `동료 합류: ${effect.unit}`;
+          break;
+        case 'party.remove':
+          description = `동료 제거: ${effect.unit}`;
+          break;
+        default:
+          description = `${effect.type}: ${JSON.stringify(effect)}`;
+      }
+      
+      return `<div class="effect-item" data-idx="${idx}" style="background:#1a2332; padding:4px 8px; border-radius:4px; margin-bottom:2px; display:flex; justify-content:space-between; align-items:center;">
+        <span style="color:#cbd5e1;">${description}</span>
+        <button class="btn danger effect-del" data-idx="${idx}" style="padding:2px 6px; font-size:12px;">×</button>
+      </div>`;
+    }).join('');
+  }
+  
+  function collectChoiceData(choiceContainer){
+    const choiceItems = Array.from(choiceContainer.querySelectorAll('.choice-item'));
+    return choiceItems.map(item => {
+      const label = item.querySelector('.choice_label')?.value || '';
+      const next = item.querySelector('.choice_next')?.value || '';
+      
+      // 효과 수집
+      const effects = [];
+      const effectItems = Array.from(item.querySelectorAll('.effect-item'));
+      effectItems.forEach(effectEl => {
+        const idx = Number(effectEl.dataset.idx);
+        const choiceIdx = Number(item.dataset.idx);
+        const storedEffects = getStoredEffects(choiceIdx) || [];
+        if(storedEffects[idx]) {
+          effects.push(storedEffects[idx]);
+        }
+      });
+      
+      return { label, next, effects };
+    });
+  }
+  
+  // 효과 저장소 (임시)
+  const effectsStorage = new Map();
+  
+  function getStoredEffects(choiceIdx){
+    return effectsStorage.get(choiceIdx) || [];
+  }
+  
+  function setStoredEffects(choiceIdx, effects){
+    effectsStorage.set(choiceIdx, effects);
+  }
+  
+  function initializeEffectsStorage(events){
+    effectsStorage.clear();
+    
+    events.forEach(event => {
+      if(event.cmd === 'choice' && event.items) {
+        event.items.forEach((item, idx) => {
+          setStoredEffects(idx, item.effects || []);
+        });
+      }
+    });
+  }
+  
+  function addEffectToChoice(choiceIdx, effect){
+    const effects = getStoredEffects(choiceIdx);
+    effects.push(effect);
+    setStoredEffects(choiceIdx, effects);
+  }
+  
+  function removeEffectFromChoice(choiceIdx, effectIdx){
+    const effects = getStoredEffects(choiceIdx);
+    effects.splice(effectIdx, 1);
+    setStoredEffects(choiceIdx, effects);
+  }
+  
+  function collectAvailableFlags(){
+    const flagSet = new Set();
+    const flagList = [];
+    
+    // FLAGS 레지스트리에서 수집
+    Object.keys(flags || FLAG_REG || {}).forEach(key => {
+      const flag = (flags || FLAG_REG || {})[key];
+      if(!key.includes('*')) { // 와일드카드가 아닌 것만
+        flagSet.add(key);
+        flagList.push({
+          key: key,
+          desc: flag?.desc || '',
+          type: flag?.type || 'boolean',
+          source: 'registry'
+        });
+      }
+    });
+    
+    // 현재 에피소드들에서 사용된 플래그들 수집
+    Object.values(episodes || {}).forEach(ep => {
+      if(ep.events) {
+        ep.events.forEach(event => {
+          if(event.cmd === 'choice' && event.items) {
+            event.items.forEach(item => {
+              (item.effects || []).forEach(effect => {
+                if(effect.type === 'flag.set' && effect.key && !flagSet.has(effect.key)) {
+                  flagSet.add(effect.key);
+                  flagList.push({
+                    key: effect.key,
+                    desc: '에피소드에서 사용됨',
+                    type: typeof effect.value === 'boolean' ? 'boolean' : typeof effect.value,
+                    source: 'episode'
+                  });
+                }
+              });
+            });
+          }
+        });
+      }
+    });
+    
+    // 루트에서 사용된 플래그들도 수집
+    (routes || []).forEach(route => {
+      (route.requirements || []).forEach(req => {
+        if(req.type === 'flag' && req.key && !flagSet.has(req.key)) {
+          flagSet.add(req.key);
+          flagList.push({
+            key: req.key,
+            desc: '루트 조건에서 사용됨',
+            type: typeof req.value === 'boolean' ? 'boolean' : typeof req.value,
+            source: 'route'
+          });
+        }
+      });
+    });
+    
+    return flagList.sort((a, b) => a.key.localeCompare(b.key));
+  }
+  
+  function collectAvailableUnits(){
+    const units = (state?.data?.units) || (window.appState?.data?.units) || {};
+    return Object.keys(units)
+      .filter(id => id.startsWith('C-')) // 동료만 (C-로 시작)
+      .map(id => ({
+        id: id,
+        name: units[id]?.name || id,
+        desc: `HP: ${units[id]?.hp || 0}, ATK: ${units[id]?.atk || 0}`
+      }))
+      .sort((a, b) => a.id.localeCompare(b.id));
+  }
+  
+  function refreshEffectsList(choiceIdx){
+    const effectsList = formEl.querySelector(`.effects-list[data-idx="${choiceIdx}"]`);
+    if(effectsList) {
+      const effects = getStoredEffects(choiceIdx);
+      effectsList.innerHTML = renderEffectsList(effects);
+      bindChoiceEventHandlers(formEl.querySelector('#dslEvents'));
+    }
+  }
+  
+  function showFlagEffectModal(choiceIdx){
+    const availableFlags = collectAvailableFlags();
+    
+    const modal = document.createElement('div');
+    modal.className = 'modal-backdrop';
+    modal.innerHTML = `
+      <div class="modal" style="min-width:500px;">
+        <h3>플래그 설정</h3>
+        <div class="col" style="gap:8px;">
+          <label class="col" style="gap:4px;">
+            <span style="color:#9aa0a6;">플래그 키:</span>
+            <div class="row" style="gap:6px;">
+              <select id="flagKeySelect" style="flex:1; padding:6px 8px; background:#0f1524; border:1px solid #2b3450; color:#cbd5e1; border-radius:6px;">
+                <option value="">기존 플래그 선택...</option>
+                ${availableFlags.map(flag => `<option value="${flag.key}">${flag.key}${flag.desc ? ` - ${flag.desc}` : ''}</option>`).join('')}
+                <option value="__custom__">🆕 새 플래그 직접 입력</option>
+              </select>
+            </div>
+            <input id="flagKeyCustom" placeholder="새 플래그 키 (예: ep.EP-001.newChoice)" style="display:none; margin-top:4px; padding:6px 8px; background:#0f1524; border:1px solid #2b3450; color:#cbd5e1; border-radius:6px;"/>
+          </label>
+          <label class="row" style="gap:8px; align-items:center; margin-top:8px;">
+            <span style="width:80px;">값:</span>
+            <select id="flagValueType" style="flex:0 0 100px; padding:6px 8px; background:#0f1524; border:1px solid #2b3450; color:#cbd5e1; border-radius:6px;">
+              <option value="true">true</option>
+              <option value="false">false</option>
+              <option value="text">텍스트</option>
+              <option value="number">숫자</option>
+            </select>
+            <input id="flagValue" placeholder="값" style="flex:1; padding:6px 8px; background:#0f1524; border:1px solid #2b3450; color:#cbd5e1; border-radius:6px; display:none;"/>
+          </label>
+        </div>
+        <div class="row" style="justify-content:flex-end; gap:8px; margin-top:12px;">
+          <button class="btn" id="flagCancel">취소</button>
+          <button class="btn primary" id="flagOk">추가</button>
+        </div>
+      </div>
+    `;
+    
+    document.body.appendChild(modal);
+    
+    const flagKeySelect = modal.querySelector('#flagKeySelect');
+    const flagKeyCustom = modal.querySelector('#flagKeyCustom');
+    const flagValueType = modal.querySelector('#flagValueType');
+    const flagValue = modal.querySelector('#flagValue');
+    
+    // 플래그 키 선택 이벤트
+    flagKeySelect.onchange = () => {
+      if(flagKeySelect.value === '__custom__') {
+        flagKeyCustom.style.display = 'block';
+        flagKeyCustom.focus();
+      } else {
+        flagKeyCustom.style.display = 'none';
+        
+        // 선택된 플래그의 타입에 맞게 값 타입 자동 설정
+        if(flagKeySelect.value) {
+          const selectedFlag = availableFlags.find(f => f.key === flagKeySelect.value);
+          if(selectedFlag) {
+            flagValueType.value = selectedFlag.type === 'string' ? 'text' : 
+                                 selectedFlag.type === 'number' ? 'number' : 
+                                 selectedFlag.type === 'boolean' ? 'true' : 'true';
+            flagValueType.onchange(); // 값 입력 필드 표시/숨김 트리거
+          }
+        }
+      }
+    };
+    
+    // 값 타입 변경 이벤트
+    flagValueType.onchange = () => {
+      flagValue.style.display = (flagValueType.value === 'true' || flagValueType.value === 'false') ? 'none' : 'block';
+      if(flagValueType.value === 'number') {
+        flagValue.type = 'number';
+        flagValue.placeholder = '숫자 값';
+      } else {
+        flagValue.type = 'text';
+        flagValue.placeholder = '텍스트 값';
+      }
+    };
+    
+    modal.querySelector('#flagCancel').onclick = () => modal.remove();
+    modal.querySelector('#flagOk').onclick = () => {
+      let key;
+      
+      if(flagKeySelect.value === '__custom__') {
+        key = flagKeyCustom.value.trim();
+        if(!key) {
+          alert('새 플래그 키를 입력하세요.');
+          flagKeyCustom.focus();
+          return;
+        }
+        // 플래그 키 형식 검증
+        if(!/^[a-zA-Z][a-zA-Z0-9._-]*$/.test(key)) {
+          alert('플래그 키는 영문자로 시작하고 영문자, 숫자, 점, 밑줄, 하이픈만 사용할 수 있습니다.');
+          flagKeyCustom.focus();
+          return;
+        }
+      } else {
+        key = flagKeySelect.value;
+        if(!key) {
+          alert('플래그를 선택하거나 새로 입력하세요.');
+          return;
+        }
+      }
+      
+      let value;
+      switch(flagValueType.value) {
+        case 'true': value = true; break;
+        case 'false': value = false; break;
+        case 'number': 
+          value = Number(flagValue.value);
+          if(isNaN(value)) {
+            alert('올바른 숫자를 입력하세요.');
+            flagValue.focus();
+            return;
+          }
+          break;
+        default: value = flagValue.value || '';
+      }
+      
+      const effect = {
+        type: 'flag.set',
+        key: key,
+        value: value
+      };
+      
+      addEffectToChoice(choiceIdx, effect);
+      refreshEffectsList(choiceIdx);
+      modal.remove();
+    };
+  }
+  
+  function showPartyEffectModal(choiceIdx){
+    const availableUnits = collectAvailableUnits();
+    
+    const modal = document.createElement('div');
+    modal.className = 'modal-backdrop';
+    modal.innerHTML = `
+      <div class="modal" style="min-width:500px;">
+        <h3>동료 관리</h3>
+        <div class="col" style="gap:8px;">
+          <label class="row" style="gap:8px; align-items:center;">
+            <span style="width:80px;">동작:</span>
+            <select id="partyAction" style="flex:0 0 120px; padding:6px 8px; background:#0f1524; border:1px solid #2b3450; color:#cbd5e1; border-radius:6px;">
+              <option value="add">합류</option>
+              <option value="remove">제거</option>
+            </select>
+          </label>
+          <label class="col" style="gap:4px;">
+            <span style="color:#9aa0a6;">동료 선택:</span>
+            <select id="partyUnit" style="padding:6px 8px; background:#0f1524; border:1px solid #2b3450; color:#cbd5e1; border-radius:6px;">
+              ${availableUnits.length > 0 ? 
+                availableUnits.map(u => `<option value="${u.id}">${u.name} (${u.id}) - ${u.desc}</option>`).join('') :
+                '<option value="">사용 가능한 동료가 없습니다</option>'
+              }
+            </select>
+            ${availableUnits.length > 0 ? `
+              <div style="color:#9aa0a6; font-size:12px; margin-top:4px;">
+                💡 동료는 C-로 시작하는 유닛만 표시됩니다
+              </div>
+            ` : `
+              <div style="color:#f87171; font-size:12px; margin-top:4px;">
+                ⚠️ units.js에서 C-로 시작하는 유닛을 추가하세요
+              </div>
+            `}
+          </label>
+        </div>
+        <div class="row" style="justify-content:flex-end; gap:8px; margin-top:12px;">
+          <button class="btn" id="partyCancel">취소</button>
+          <button class="btn primary" id="partyOk" ${availableUnits.length === 0 ? 'disabled' : ''}>추가</button>
+        </div>
+      </div>
+    `;
+    
+    document.body.appendChild(modal);
+    
+    modal.querySelector('#partyCancel').onclick = () => modal.remove();
+    modal.querySelector('#partyOk').onclick = () => {
+      if(availableUnits.length === 0) {
+        alert('사용 가능한 동료가 없습니다.');
+        return;
+      }
+      
+      const action = modal.querySelector('#partyAction').value;
+      const unit = modal.querySelector('#partyUnit').value;
+      
+      if(!unit) {
+        alert('동료를 선택하세요.');
+        return;
+      }
+      
+      const effect = {
+        type: `party.${action}`,
+        unit: unit
+      };
+      
+      addEffectToChoice(choiceIdx, effect);
+      refreshEffectsList(choiceIdx);
+      modal.remove();
+    };
+  }
+  
+  function showCustomEffectModal(choiceIdx){
+    const modal = document.createElement('div');
+    modal.className = 'modal-backdrop';
+    modal.innerHTML = `
+      <div class="modal" style="min-width:500px;">
+        <h3>커스텀 효과</h3>
+        <div class="col" style="gap:8px;">
+          <label class="col" style="gap:4px;">
+            <span style="color:#9aa0a6;">JSON 형식으로 입력하세요:</span>
+            <textarea id="customEffect" placeholder='{"type": "custom", "data": "value"}' style="min-height:100px; padding:8px; background:#0f1524; border:1px solid #2b3450; color:#cbd5e1; border-radius:6px;"></textarea>
+          </label>
+        </div>
+        <div class="row" style="justify-content:flex-end; gap:8px; margin-top:12px;">
+          <button class="btn" id="customCancel">취소</button>
+          <button class="btn primary" id="customOk">추가</button>
+        </div>
+      </div>
+    `;
+    
+    document.body.appendChild(modal);
+    
+    modal.querySelector('#customCancel').onclick = () => modal.remove();
+    modal.querySelector('#customOk').onclick = () => {
+      const jsonText = modal.querySelector('#customEffect').value.trim();
+      if(!jsonText) {
+        alert('효과를 입력하세요.');
+        return;
+      }
+      
+      try {
+        const effect = JSON.parse(jsonText);
+        addEffectToChoice(choiceIdx, effect);
+        refreshEffectsList(choiceIdx);
+        modal.remove();
+      } catch(e) {
+        alert('올바른 JSON 형식이 아닙니다: ' + e.message);
+      }
+    };
+  }
+
+  // DSL 관련 함수들
+  function dslEventRow(event, i){
+    const cmd = event?.cmd || '';
+    let fields = '';
+    
+    switch(cmd){
+      case 'bg':
+        fields = `<input class="dsl_bg_name" placeholder="배경 이름 (예: BG_001)" value="${event.name||''}" style="flex:1; padding:6px 8px; background:#0f1524; border:1px solid #2b3450; color:#cbd5e1; border-radius:6px;"/>
+                  <input class="dsl_bg_dur" placeholder="지속시간(ms)" value="${event.dur||500}" style="flex:0 0 120px; padding:6px 8px; background:#0f1524; border:1px solid #2b3450; color:#cbd5e1; border-radius:6px;"/>`;
+        break;
+      case 'show':
+        fields = `<input class="dsl_show_id" placeholder="캐릭터 ID (예: story/cha_001)" value="${event.id||''}" style="flex:1; padding:6px 8px; background:#0f1524; border:1px solid #2b3450; color:#cbd5e1; border-radius:6px;"/>
+                  <select class="dsl_show_side" style="flex:0 0 100px; padding:6px 8px; background:#0f1524; border:1px solid #2b3450; color:#cbd5e1; border-radius:6px;">
+                    <option value="left"${event.side==='left'?' selected':''}>왼쪽</option>
+                    <option value="center"${event.side==='center'?' selected':''}>중앙</option>
+                    <option value="right"${event.side==='right'?' selected':''}>오른쪽</option>
+                  </select>
+                  <input class="dsl_show_offset_x" placeholder="X오프셋" value="${event.offset?.x||''}" style="flex:0 0 80px; padding:6px 8px; background:#0f1524; border:1px solid #2b3450; color:#cbd5e1; border-radius:6px;"/>
+                  <input class="dsl_show_offset_y" placeholder="Y오프셋" value="${event.offset?.y||''}" style="flex:0 0 80px; padding:6px 8px; background:#0f1524; border:1px solid #2b3450; color:#cbd5e1; border-radius:6px;"/>
+                  <input class="dsl_show_dur" placeholder="시간" value="${event.dur||250}" style="flex:0 0 80px; padding:6px 8px; background:#0f1524; border:1px solid #2b3450; color:#cbd5e1; border-radius:6px;"/>`;
+        break;
+      case 'say':
+        fields = `<input class="dsl_say_speaker" placeholder="화자" value="${event.speaker||''}" style="flex:0 0 140px; padding:6px 8px; background:#0f1524; border:1px solid #2b3450; color:#cbd5e1; border-radius:6px;"/>
+                  <input class="dsl_say_text" placeholder="대사 내용" value="${event.text||''}" style="flex:1; padding:6px 8px; background:#0f1524; border:1px solid #2b3450; color:#cbd5e1; border-radius:6px;"/>`;
+        break;
+      case 'choice':
+        const items = event.items || [{label:'', next:'', effects:[]}];
+        const choiceRows = items.map((item, idx) => `
+          <div class="choice-item" data-idx="${idx}" style="border:1px solid #2b3450; border-radius:6px; padding:8px; margin-top:6px;">
+            <div class="row" style="gap:6px; margin-bottom:6px;">
+              <input class="choice_label" placeholder="선택지 텍스트" value="${item.label||''}" style="flex:1; padding:6px 8px; background:#0f1524; border:1px solid #2b3450; color:#cbd5e1; border-radius:6px;"/>
+              <input class="choice_next" placeholder="다음 (R-/EP-/BT-)" value="${item.next||''}" style="flex:0 0 140px; padding:6px 8px; background:#0f1524; border:1px solid #2b3450; color:#cbd5e1; border-radius:6px;"/>
+              <button class="btn danger choice_del">삭제</button>
+            </div>
+            <div class="choice-effects" style="margin-top:6px;">
+              <div style="color:#9aa0a6; margin-bottom:4px;">효과:</div>
+              <div class="effects-list" data-idx="${idx}">${renderEffectsList(item.effects || [])}</div>
+              <div class="row" style="gap:6px; margin-top:4px;">
+                <button class="btn effect-add-flag" data-choice="${idx}">플래그 설정</button>
+                <button class="btn effect-add-party" data-choice="${idx}">동료 합류</button>
+                <button class="btn effect-add-custom" data-choice="${idx}">커스텀</button>
+              </div>
+            </div>
+          </div>
+        `).join('');
+        fields = `
+          <div class="choice-container">
+            ${choiceRows}
+            <button class="btn choice-add" style="margin-top:6px;">선택지 추가</button>
+          </div>
+        `;
+        break;
+      case 'popup':
+        fields = `<input class="dsl_popup_name" placeholder="팝업 이미지 이름" value="${event.name||''}" style="flex:1; padding:6px 8px; background:#0f1524; border:1px solid #2b3450; color:#cbd5e1; border-radius:6px;"/>
+                  <input class="dsl_popup_width" placeholder="너비 (예: 60%)" value="${event.size?.width||''}" style="flex:0 0 120px; padding:6px 8px; background:#0f1524; border:1px solid #2b3450; color:#cbd5e1; border-radius:6px;"/>
+                  <input class="dsl_popup_height" placeholder="높이 (예: 60%)" value="${event.size?.height||''}" style="flex:0 0 120px; padding:6px 8px; background:#0f1524; border:1px solid #2b3450; color:#cbd5e1; border-radius:6px;"/>
+                  <input class="dsl_popup_dur" placeholder="시간" value="${event.dur||300}" style="flex:0 0 80px; padding:6px 8px; background:#0f1524; border:1px solid #2b3450; color:#cbd5e1; border-radius:6px;"/>`;
+        break;
+      case 'hidePopup':
+        fields = `<input class="dsl_hide_popup_dur" placeholder="페이드아웃 시간(ms)" value="${event.dur||300}" style="flex:0 0 120px; padding:6px 8px; background:#0f1524; border:1px solid #2b3450; color:#cbd5e1; border-radius:6px;"/>`;
+        break;
+      case 'move':
+        fields = `<input class="dsl_move_id" placeholder="캐릭터 ID" value="${event.id||''}" style="flex:1; padding:6px 8px; background:#0f1524; border:1px solid #2b3450; color:#cbd5e1; border-radius:6px;"/>
+                  <select class="dsl_move_side" style="flex:0 0 100px; padding:6px 8px; background:#0f1524; border:1px solid #2b3450; color:#cbd5e1; border-radius:6px;">
+                    <option value="left"${event.side==='left'?' selected':''}>왼쪽</option>
+                    <option value="center"${event.side==='center'?' selected':''}>중앙</option>
+                    <option value="right"${event.side==='right'?' selected':''}>오른쪽</option>
+                  </select>
+                  <input class="dsl_move_offset_x" placeholder="X오프셋" value="${event.offset?.x||''}" style="flex:0 0 80px; padding:6px 8px; background:#0f1524; border:1px solid #2b3450; color:#cbd5e1; border-radius:6px;"/>
+                  <input class="dsl_move_offset_y" placeholder="Y오프셋" value="${event.offset?.y||''}" style="flex:0 0 80px; padding:6px 8px; background:#0f1524; border:1px solid #2b3450; color:#cbd5e1; border-radius:6px;"/>
+                  <input class="dsl_move_dur" placeholder="시간" value="${event.dur||250}" style="flex:0 0 80px; padding:6px 8px; background:#0f1524; border:1px solid #2b3450; color:#cbd5e1; border-radius:6px;"/>`;
+        break;
+      default:
+        fields = `<input placeholder="명령어별 설정" style="flex:1; padding:6px 8px; background:#0f1524; border:1px solid #2b3450; color:#cbd5e1; border-radius:6px;" disabled/>`;
+    }
+    
+    return `<div class="dsl-event" data-idx="${i}" style="margin-top:6px; padding:8px; border:1px solid #2b3450; border-radius:6px;">
+      <div class="row" style="gap:6px; align-items:center; margin-bottom:6px;">
+        <span class="drag-handle" style="cursor:grab; color:#9aa0a6;">↕</span>
+        <select class="dsl_cmd" style="flex:0 0 120px; padding:6px 8px; background:#0f1524; border:1px solid #2b3450; color:#cbd5e1; border-radius:6px;">
+          <option value="">(선택)</option>
+          <option value="bg"${cmd==='bg'?' selected':''}>배경</option>
+          <option value="show"${cmd==='show'?' selected':''}>캐릭터 표시</option>
+          <option value="say"${cmd==='say'?' selected':''}>대사</option>
+          <option value="choice"${cmd==='choice'?' selected':''}>선택지</option>
+          <option value="popup"${cmd==='popup'?' selected':''}>팝업</option>
+          <option value="hidePopup"${cmd==='hidePopup'?' selected':''}>팝업 숨김</option>
+          <option value="move"${cmd==='move'?' selected':''}>이동</option>
+          <option value="wait"${cmd==='wait'?' selected':''}>대기</option>
+        </select>
+        <button class="btn danger dsl_del">삭제</button>
+      </div>
+      <div class="row" style="gap:6px; align-items:flex-start;">
+        ${fields}
+      </div>
+    </div>`;
+  }
+  
+  function bindDslButtons(){
+    const host = formEl.querySelector('#dslEvents');
+    if(!host) return;
+    
+    // 명령어 추가 버튼들
+    const btnBg = formEl.querySelector('#btnDslAddBg');
+    const btnShow = formEl.querySelector('#btnDslAddShow');
+    const btnSay = formEl.querySelector('#btnDslAddSay');
+    const btnChoice = formEl.querySelector('#btnDslAddChoice');
+    const btnPopup = formEl.querySelector('#btnDslAddPopup');
+    const btnMove = formEl.querySelector('#btnDslAddMove');
+    const btnToLegacy = formEl.querySelector('#btnDslToLegacy');
+    
+    if(btnBg){ btnBg.onclick = () => addDslEvent({cmd:'bg', name:'', dur:500}); }
+    if(btnShow){ btnShow.onclick = () => addDslEvent({cmd:'show', id:'', side:'center', dur:250}); }
+    if(btnSay){ btnSay.onclick = () => addDslEvent({cmd:'say', speaker:'', text:''}); }
+    if(btnChoice){ btnChoice.onclick = () => addDslEvent({cmd:'choice', items:[{label:'', next:''}]}); }
+    if(btnPopup){ btnPopup.onclick = () => addDslEvent({cmd:'popup', name:'', dur:300}); }
+    if(btnMove){ btnMove.onclick = () => addDslEvent({cmd:'move', id:'', side:'center', dur:250}); }
+    if(btnToLegacy){ btnToLegacy.onclick = () => convertDslToLegacy(); }
+    
+    // 기존 이벤트 행들의 삭제 버튼과 명령어 변경 바인딩
+    bindDslEventRows();
+  }
+  
+  function addDslEvent(event){
+    const host = formEl.querySelector('#dslEvents');
+    if(!host) return;
+    
+    const idx = host.querySelectorAll('.dsl-event').length;
+    const div = document.createElement('div');
+    div.innerHTML = dslEventRow(event, idx);
+    host.appendChild(div.firstChild);
+    bindDslEventRows();
+  }
+  
+  function bindDslEventRows(){
+    const host = formEl.querySelector('#dslEvents');
+    if(!host) return;
+    
+    // 삭제 버튼
+    host.querySelectorAll('.dsl_del').forEach(btn => {
+      btn.onclick = () => {
+        const row = btn.closest('.dsl-event');
+        if(row) row.remove();
+      };
+    });
+    
+    // 선택지 관련 이벤트 핸들러
+    bindChoiceEventHandlers(host);
+    
+    // 명령어 변경시 필드 재생성
+    host.querySelectorAll('.dsl_cmd').forEach(sel => {
+      sel.onchange = () => {
+        const row = sel.closest('.dsl-event');
+        const idx = row.dataset.idx;
+        const newCmd = sel.value;
+        const newEvent = { cmd: newCmd };
+        
+        // 기본값 설정
+        switch(newCmd){
+          case 'bg': newEvent.name = ''; newEvent.dur = 500; break;
+          case 'show': newEvent.id = ''; newEvent.side = 'center'; newEvent.dur = 250; break;
+          case 'say': newEvent.speaker = ''; newEvent.text = ''; break;
+          case 'choice': newEvent.items = [{label:'', next:'', effects:[]}]; break;
+          case 'popup': newEvent.name = ''; newEvent.dur = 300; break;
+          case 'hidePopup': newEvent.dur = 300; break;
+          case 'move': newEvent.id = ''; newEvent.side = 'center'; newEvent.dur = 250; break;
+        }
+        
+        row.outerHTML = dslEventRow(newEvent, idx);
+        bindDslEventRows();
+      };
+    });
+  }
+  
+  function bindChoiceEventHandlers(host){
+    // 선택지 추가 버튼
+    host.querySelectorAll('.choice-add').forEach(btn => {
+      btn.onclick = () => {
+        const container = btn.closest('.choice-container');
+        const choiceCount = container.querySelectorAll('.choice-item').length;
+        const newChoiceHTML = `
+          <div class="choice-item" data-idx="${choiceCount}" style="border:1px solid #2b3450; border-radius:6px; padding:8px; margin-top:6px;">
+            <div class="row" style="gap:6px; margin-bottom:6px;">
+              <input class="choice_label" placeholder="선택지 텍스트" value="" style="flex:1; padding:6px 8px; background:#0f1524; border:1px solid #2b3450; color:#cbd5e1; border-radius:6px;"/>
+              <input class="choice_next" placeholder="다음 (R-/EP-/BT-)" value="" style="flex:0 0 140px; padding:6px 8px; background:#0f1524; border:1px solid #2b3450; color:#cbd5e1; border-radius:6px;"/>
+              <button class="btn danger choice_del">삭제</button>
+            </div>
+            <div class="choice-effects" style="margin-top:6px;">
+              <div style="color:#9aa0a6; margin-bottom:4px;">효과:</div>
+              <div class="effects-list" data-idx="${choiceCount}">${renderEffectsList([])}</div>
+              <div class="row" style="gap:6px; margin-top:4px;">
+                <button class="btn effect-add-flag" data-choice="${choiceCount}">플래그 설정</button>
+                <button class="btn effect-add-party" data-choice="${choiceCount}">동료 합류</button>
+                <button class="btn effect-add-custom" data-choice="${choiceCount}">커스텀</button>
+              </div>
+            </div>
+          </div>
+        `;
+        
+        const div = document.createElement('div');
+        div.innerHTML = newChoiceHTML;
+        container.insertBefore(div.firstChild, btn);
+        
+        // 효과 저장소 초기화
+        setStoredEffects(choiceCount, []);
+        
+        bindChoiceEventHandlers(host);
+      };
+    });
+    
+    // 선택지 삭제 버튼
+    host.querySelectorAll('.choice_del').forEach(btn => {
+      btn.onclick = () => {
+        const choiceItem = btn.closest('.choice-item');
+        const choiceIdx = Number(choiceItem.dataset.idx);
+        
+        // 효과 저장소에서 제거
+        effectsStorage.delete(choiceIdx);
+        
+        choiceItem.remove();
+        bindChoiceEventHandlers(host);
+      };
+    });
+    
+    // 효과 추가 버튼들
+    host.querySelectorAll('.effect-add-flag').forEach(btn => {
+      btn.onclick = () => showFlagEffectModal(Number(btn.dataset.choice));
+    });
+    
+    host.querySelectorAll('.effect-add-party').forEach(btn => {
+      btn.onclick = () => showPartyEffectModal(Number(btn.dataset.choice));
+    });
+    
+    host.querySelectorAll('.effect-add-custom').forEach(btn => {
+      btn.onclick = () => showCustomEffectModal(Number(btn.dataset.choice));
+    });
+    
+    // 효과 삭제 버튼
+    host.querySelectorAll('.effect-del').forEach(btn => {
+      btn.onclick = () => {
+        const effectItem = btn.closest('.effect-item');
+        const effectIdx = Number(btn.dataset.idx);
+        const choiceIdx = Number(effectItem.closest('.choice-item').dataset.idx);
+        
+        removeEffectFromChoice(choiceIdx, effectIdx);
+        refreshEffectsList(choiceIdx);
+      };
+    });
+  }
+  
+  function convertLegacyToDsl(epId){
+    if(!confirm('레거시 형식을 DSL 형식으로 변환하시겠습니까?')) return;
+    
+    const ep = episodes[epId] || {};
+    const events = [];
+    
+    // scene을 say 명령어로 변환
+    (ep.scene || []).forEach(line => {
+      if(line.speaker || line.text){
+        events.push({
+          cmd: 'say',
+          speaker: line.speaker || '',
+          text: line.text || ''
+        });
+      }
+    });
+    
+    // choices를 choice 명령어로 변환
+    if(ep.choices && ep.choices.length > 0){
+      events.push({
+        cmd: 'choice',
+        items: ep.choices.map(c => ({
+          label: c.label || '',
+          next: c.next || '',
+          effects: c.effects || []
+        }))
+      });
+    }
+    
+    episodes[epId] = { events };
+    renderForm();
+  }
+  
+  function convertDslToLegacy(){
+    if(!confirm('DSL 형식을 레거시 형식으로 변환하시겠습니까? (일부 기능이 손실될 수 있습니다)')) return;
+    
+    const epId = (routes.find(r => r.id === selectedId)?.next) || '';
+    if(!epId.startsWith('EP-')) return;
+    
+    const ep = episodes[epId] || {};
+    const scene = [];
+    let choices = [];
+    
+    // events에서 say와 choice만 추출
+    (ep.events || []).forEach(event => {
+      if(event.cmd === 'say'){
+        scene.push({
+          speaker: event.speaker || '',
+          text: event.text || ''
+        });
+      } else if(event.cmd === 'choice'){
+        choices = event.items || [];
+      }
+    });
+    
+    episodes[epId] = { scene, choices };
+    renderForm();
+  }
+  
+  function bindBattleEpisodeButtons(){
+    // Win DSL 버튼들
+    const btnWinDslBg = formEl.querySelector('#btnEpWinDslAddBg');
+    const btnWinDslSay = formEl.querySelector('#btnEpWinDslAddSay');
+    const btnWinDslChoice = formEl.querySelector('#btnEpWinDslAddChoice');
+    
+    if(btnWinDslBg){ btnWinDslBg.onclick = () => addDslEventToHost('#epWinDslEvents', {cmd:'bg', name:'', dur:500}); }
+    if(btnWinDslSay){ btnWinDslSay.onclick = () => addDslEventToHost('#epWinDslEvents', {cmd:'say', speaker:'', text:''}); }
+    if(btnWinDslChoice){ btnWinDslChoice.onclick = () => addDslEventToHost('#epWinDslEvents', {cmd:'choice', items:[{label:'', next:''}]}); }
+    
+    // Lose DSL 버튼들
+    const btnLoseDslBg = formEl.querySelector('#btnEpLoseDslAddBg');
+    const btnLoseDslSay = formEl.querySelector('#btnEpLoseDslAddSay');
+    const btnLoseDslChoice = formEl.querySelector('#btnEpLoseDslAddChoice');
+    
+    if(btnLoseDslBg){ btnLoseDslBg.onclick = () => addDslEventToHost('#epLoseDslEvents', {cmd:'bg', name:'', dur:500}); }
+    if(btnLoseDslSay){ btnLoseDslSay.onclick = () => addDslEventToHost('#epLoseDslEvents', {cmd:'say', speaker:'', text:''}); }
+    if(btnLoseDslChoice){ btnLoseDslChoice.onclick = () => addDslEventToHost('#epLoseDslEvents', {cmd:'choice', items:[{label:'', next:''}]}); }
+    
+    // 레거시 버튼들
+    const btnWinL = formEl.querySelector('#btnEpWinAddLine');
+    const btnWinC = formEl.querySelector('#btnEpWinAddChoice');
+    const btnWinP = formEl.querySelector('#btnEpWinAddParty');
+    if(btnWinL){ btnWinL.onclick=()=>{ const host=formEl.querySelector('#epWinScene'); const idx=host.querySelectorAll('.row').length; const div=document.createElement('div'); div.innerHTML=epLineRow({speaker:'', text:''}, idx); host.appendChild(div.firstChild); bindEpRowDeletes(); }; }
+    if(btnWinC){ btnWinC.onclick=()=>{ const host=formEl.querySelector('#epWinChoices'); const idx=host.querySelectorAll('.row').length; const div=document.createElement('div'); div.innerHTML=epChoiceRow({label:'', next:'', effects:[]}, idx); host.appendChild(div.firstChild); bindChoiceRowDeletes(); attachChoiceTemplateHandlers(); }; }
+    if(btnWinP){ btnWinP.onclick=()=>{ const host=formEl.querySelector('#epWinChoices'); const idx=host.querySelectorAll('.row').length; const unitId = (buildUnitOptions()[0]?.id)||'C-001'; const choice = { label:'동료 합류', next:'', effects:[{ type:'party.add', unit: unitId }] }; const div=document.createElement('div'); div.innerHTML=epChoiceRow(choice, idx); host.appendChild(div.firstChild); bindChoiceRowDeletes(); attachChoiceTemplateHandlers(); }; }
+    const btnLoseL = formEl.querySelector('#btnEpLoseAddLine');
+    const btnLoseC = formEl.querySelector('#btnEpLoseAddChoice');
+    const btnLoseP = formEl.querySelector('#btnEpLoseAddParty');
+    if(btnLoseL){ btnLoseL.onclick=()=>{ const host=formEl.querySelector('#epLoseScene'); const idx=host.querySelectorAll('.row').length; const div=document.createElement('div'); div.innerHTML=epLineRow({speaker:'', text:''}, idx); host.appendChild(div.firstChild); bindEpRowDeletes(); }; }
+    if(btnLoseC){ btnLoseC.onclick=()=>{ const host=formEl.querySelector('#epLoseChoices'); const idx=host.querySelectorAll('.row').length; const div=document.createElement('div'); div.innerHTML=epChoiceRow({label:'', next:'', effects:[]}, idx); host.appendChild(div.firstChild); bindChoiceRowDeletes(); attachChoiceTemplateHandlers(); }; }
+    if(btnLoseP){ btnLoseP.onclick=()=>{ const host=formEl.querySelector('#epLoseChoices'); const idx=host.querySelectorAll('.row').length; const unitId = (buildUnitOptions()[0]?.id)||'C-001'; const choice = { label:'동료 합류', next:'', effects:[{ type:'party.add', unit: unitId }] }; const div=document.createElement('div'); div.innerHTML=epChoiceRow(choice, idx); host.appendChild(div.firstChild); bindChoiceRowDeletes(); attachChoiceTemplateHandlers(); }; }
+    
+    // DSL 이벤트 행들 바인딩
+    bindDslEventRowsInHost('#epWinDslEvents');
+    bindDslEventRowsInHost('#epLoseDslEvents');
+  }
+  
+  function addDslEventToHost(hostSelector, event){
+    const host = formEl.querySelector(hostSelector);
+    if(!host) return;
+    
+    const idx = host.querySelectorAll('.dsl-event').length;
+    const div = document.createElement('div');
+    div.innerHTML = dslEventRow(event, idx);
+    host.appendChild(div.firstChild);
+    bindDslEventRowsInHost(hostSelector);
+  }
+  
+  function bindDslEventRowsInHost(hostSelector){
+    const host = formEl.querySelector(hostSelector);
+    if(!host) return;
+    
+    // 삭제 버튼
+    host.querySelectorAll('.dsl_del').forEach(btn => {
+      btn.onclick = () => {
+        const row = btn.closest('.dsl-event');
+        if(row) row.remove();
+      };
+    });
+    
+    // 명령어 변경시 필드 재생성
+    host.querySelectorAll('.dsl_cmd').forEach(sel => {
+      sel.onchange = () => {
+        const row = sel.closest('.dsl-event');
+        const idx = row.dataset.idx;
+        const newCmd = sel.value;
+        const newEvent = { cmd: newCmd };
+        
+        // 기본값 설정
+        switch(newCmd){
+          case 'bg': newEvent.name = ''; newEvent.dur = 500; break;
+          case 'show': newEvent.id = ''; newEvent.side = 'center'; newEvent.dur = 250; break;
+          case 'say': newEvent.speaker = ''; newEvent.text = ''; break;
+          case 'choice': newEvent.items = [{label:'', next:''}]; break;
+          case 'popup': newEvent.name = ''; newEvent.dur = 300; break;
+          case 'hidePopup': newEvent.dur = 300; break;
+          case 'move': newEvent.id = ''; newEvent.side = 'center'; newEvent.dur = 250; break;
+        }
+        
+        row.outerHTML = dslEventRow(newEvent, idx);
+        bindDslEventRowsInHost(hostSelector);
+      };
+    });
+  }
 
   // file helpers (routes.js 전용)
   function extractExportArray(source, exportName){
@@ -826,6 +1778,50 @@ export function renderRouteEditorView(root, state){
   renderForm();
   drawGraph();
   root.innerHTML=''; root.appendChild(wrap);
+  
+  // CSS 스타일 추가 (DSL 에디터용)
+  try{
+    const dslStyleId = 'dslEditorStyles';
+    if(!document.getElementById(dslStyleId)){
+      const st = document.createElement('style'); st.id = dslStyleId;
+      st.textContent = `
+        .dsl-event { transition: all 0.2s ease; }
+        .dsl-event:hover { background-color: rgba(43, 52, 80, 0.3); }
+        .drag-handle { user-select: none; }
+        .dsl-event .row { align-items: center; }
+        
+        /* 스크롤바 스타일링 */
+        #dslEvents::-webkit-scrollbar, #epScene::-webkit-scrollbar, #epChoices::-webkit-scrollbar,
+        [id*="DslEvents"]::-webkit-scrollbar, [id*="Scene"]::-webkit-scrollbar, [id*="Choices"]::-webkit-scrollbar {
+          width: 8px;
+        }
+        
+        #dslEvents::-webkit-scrollbar-track, #epScene::-webkit-scrollbar-track, #epChoices::-webkit-scrollbar-track,
+        [id*="DslEvents"]::-webkit-scrollbar-track, [id*="Scene"]::-webkit-scrollbar-track, [id*="Choices"]::-webkit-scrollbar-track {
+          background: #0f1524;
+          border-radius: 4px;
+        }
+        
+        #dslEvents::-webkit-scrollbar-thumb, #epScene::-webkit-scrollbar-thumb, #epChoices::-webkit-scrollbar-thumb,
+        [id*="DslEvents"]::-webkit-scrollbar-thumb, [id*="Scene"]::-webkit-scrollbar-thumb, [id*="Choices"]::-webkit-scrollbar-thumb {
+          background: #2b3450;
+          border-radius: 4px;
+        }
+        
+        #dslEvents::-webkit-scrollbar-thumb:hover, #epScene::-webkit-scrollbar-thumb:hover, #epChoices::-webkit-scrollbar-thumb:hover,
+        [id*="DslEvents"]::-webkit-scrollbar-thumb:hover, [id*="Scene"]::-webkit-scrollbar-thumb:hover, [id*="Choices"]::-webkit-scrollbar-thumb:hover {
+          background: #3b4566;
+        }
+        
+        /* 스크롤 영역 내부 요소들 간격 조정 */
+        #dslEvents > .dsl-event:first-child, #epScene > .row:first-child, #epChoices > .row:first-child,
+        [id*="DslEvents"] > .dsl-event:first-child, [id*="Scene"] > .row:first-child, [id*="Choices"] > .row:first-child {
+          margin-top: 0;
+        }
+      `;
+      document.head.appendChild(st);
+    }
+  }catch{}
 }
 
 

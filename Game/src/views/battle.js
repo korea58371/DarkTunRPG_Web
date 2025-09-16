@@ -411,11 +411,51 @@ export function renderBattleView(root, state){
       const id = card.dataset.skillId; if(!id) return;
       const baseSk = state.data.skills[id];
       const sk = getEffectiveSkill(baseSk);
-      const valid = isTargetValid(sk, selectedTarget || B.target);
       const mpOk = (actor.mp||0) >= (sk.cost?.mp||0);
-      card.classList.toggle('disabled', !valid);
+      
+      // 비활성화 조건 개선: MP 부족이거나 선택 가능한 타겟이 아예 없는 경우에만
+      let shouldDisable = false;
+      
+      // 1. MP 부족
+      if(!mpOk) {
+        shouldDisable = true;
+      }
+      // 2. 선택 가능한 타겟이 아예 없는 경우
+      else if(!hasAnyValidTarget(sk)) {
+        shouldDisable = true;
+      }
+      
+      card.classList.toggle('disabled', shouldDisable);
       card.classList.toggle('mp-insufficient', !mpOk);
     });
+  }
+  
+  function hasAnyValidTarget(sk){
+    if(!sk) return false;
+    
+    // 타겟이 필요 없는 스킬들
+    if(sk.type==='move' || sk.type==='shield') return true;
+    
+    // 아군 대상 스킬
+    if(sk.range==='ally'){
+      return B.allyOrder.some(id => id && (B.units[id]?.hp > 0));
+    }
+    
+    // 적군 대상 스킬
+    if(sk.range==='ranged'){
+      return B.enemyOrder.some(id => id && (B.units[id]?.hp > 0));
+    }
+    
+    // 근접 스킬 (최전열만 타격 가능)
+    if(sk.range==='melee'){
+      const aliveEnemies = B.enemyOrder.filter(id => id && (B.units[id]?.hp > 0));
+      if(!aliveEnemies.length) return false;
+      const minCol = Math.min(...aliveEnemies.map(id => B.units[id]?.col ?? 999));
+      return aliveEnemies.some(id => (B.units[id]?.col ?? 999) === minCol);
+    }
+    
+    // 기본적으로 살아있는 적이 있으면 타겟 가능
+    return B.enemyOrder.some(id => id && (B.units[id]?.hp > 0));
   }
 
   function isTargetValid(sk, targetId){

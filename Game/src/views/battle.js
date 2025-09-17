@@ -204,9 +204,27 @@ export async function renderBattleView(root, state, skipLoading = false){
             if(u._burn && u._burn.remain>0){ buf.push(`<div class=\"slot-buff burn\" title=\"화상\"><span>🔥</span><span class=\"turns\">${u._burn.remain}</span></div>`); }
             return buf.join('');
           })();
-          el.innerHTML = `<div class=\"inner\"><div class=\"portrait\"></div><div class=\"hpbar\"><span style=\"width:${Math.max(0,(u.hp/u.hpMax)*100)}%\"></span><i class=\"pred\" style=\"width:0%\"></i></div><div class=\"shieldbar\" style=\"display:${(u.shield||0)>0?'block':'none'};\"><span style=\"width:${Math.max(0, Math.min(100, ((u.shield||0)/(u.hpMax||1))*100))}%\"></span></div><div class=\"name-label\">${u.name}</div></div><div class=\"slot-buffs\">${buffsHtml}</div><div class=\"hitbox\" style=\"position:absolute; inset:0; z-index:10;\"></div>`;
+          el.innerHTML = `<div class=\"inner\"><div class=\"portrait\"><div class=\"portrait-light\"></div></div><div class=\"hpbar\"><span style=\"width:${Math.max(0,(u.hp/u.hpMax)*100)}%\"></span><i class=\"pred\" style=\"width:0%\"></i></div><div class=\"shieldbar\" style=\"display:${(u.shield||0)>0?'block':'none'};\"><span style=\"width:${Math.max(0, Math.min(100, ((u.shield||0)/(u.hpMax||1))*100))}%\"></span></div><div class=\"name-label\">${u.name}</div></div><div class=\"slot-buffs\">${buffsHtml}</div><div class=\"hitbox\" style=\"position:absolute; inset:0; z-index:10;\"></div>`;
           // 초상 이미지: 리소스 적용 + 초기 스케일 고정(상태 전환에도 동일 비율 유지)
-          try{ const urls = getPortraitUrls(id); const p = el.querySelector('.portrait'); p.style.transformOrigin='center bottom'; p.style.transform='translate(-50%, 0) scale(1)'; safeSetBackgroundImage(p, urls.base, urls.base); }catch{}
+          try{ const urls = getPortraitUrls(id, 'default'); const p = el.querySelector('.portrait'); p.style.transformOrigin='center bottom'; p.style.transform='translate(-50%, 0) scale(1)'; safeSetBackgroundImage(p, urls.base, urls.base); }catch{}
+          // Light 오버레이 이미지 설정 (존재하는 경우에만 표시)
+          try{ 
+            const urls = getPortraitUrls(id, 'default'); 
+            const lightEl = el.querySelector('.portrait-light'); 
+            if(lightEl && urls.light){ 
+              // Light 이미지 존재 여부 확인 후 표시
+              checkLightImageExists(urls.light, (exists) => {
+                if(exists) {
+                  lightEl.style.display = 'block';
+                  safeSetBackgroundImage(lightEl, urls.light, '');
+                } else {
+                  lightEl.style.display = 'none';
+                }
+              });
+            } else if(lightEl) {
+              lightEl.style.display = 'none'; // light 이미지가 없으면 숨김
+            }
+          }catch{}
           // 원근감: row가 높을수록 슬롯 사이즈 증가 (아군/적군 동일)
           try{
             const inner = el.querySelector('.inner');
@@ -387,13 +405,54 @@ export async function renderBattleView(root, state, skipLoading = false){
   // 초상 이미지 조회: 우선 unit 데이터의 sprite 필드를 사용
   const FALLBACK_SPRITE = { base: 'assets/mon/mon_001.png' };
 
-  function getPortraitUrls(unitId){
+  function getPortraitUrls(unitId, mode = 'default'){
     try{
       const baseId = String(unitId||'').split('@')[0];
       const unitDef = state.data?.units?.[baseId];
-      if(unitDef && unitDef.sprite){ return unitDef.sprite; }
+      if(unitDef && unitDef.sprite){ 
+        const sprite = { ...unitDef.sprite };
+        // 현재 모드에 맞는 light 이미지 경로 생성
+        if(sprite.base) {
+          const basePath = sprite.base;
+          if(mode === 'hit' && sprite.hit) {
+            // hit 상태일 때는 hit 이미지에서 _hit_light 경로 생성
+            const hitPath = sprite.hit;
+            const lightPath = hitPath.replace('.png', '_light.png');
+            sprite.light = lightPath;
+          } else if(mode === 'attack' && sprite.attack) {
+            // attack 상태일 때는 attack 이미지에서 _attack_light 경로 생성
+            const attackPath = sprite.attack;
+            const lightPath = attackPath.replace('.png', '_light.png');
+            sprite.light = lightPath;
+          } else {
+            // default 상태일 때는 base 이미지에서 _light 경로 생성
+            const lightPath = basePath.replace('.png', '_light.png');
+            sprite.light = lightPath;
+          }
+        }
+        return sprite; 
+      }
       const u = B.units[unitId];
-      if(u && u.sprite){ return u.sprite; }
+      if(u && u.sprite){ 
+        const sprite = { ...u.sprite };
+        // 현재 모드에 맞는 light 이미지 경로 생성
+        if(sprite.base) {
+          const basePath = sprite.base;
+          if(mode === 'hit' && sprite.hit) {
+            const hitPath = sprite.hit;
+            const lightPath = hitPath.replace('.png', '_light.png');
+            sprite.light = lightPath;
+          } else if(mode === 'attack' && sprite.attack) {
+            const attackPath = sprite.attack;
+            const lightPath = attackPath.replace('.png', '_light.png');
+            sprite.light = lightPath;
+          } else {
+            const lightPath = basePath.replace('.png', '_light.png');
+            sprite.light = lightPath;
+          }
+        }
+        return sprite; 
+      }
       return FALLBACK_SPRITE;
     }catch{ return FALLBACK_SPRITE; }
   }
@@ -408,12 +467,24 @@ export async function renderBattleView(root, state, skipLoading = false){
     }catch{}
   }
 
+  // Light 이미지 존재 여부를 확인하는 함수
+  function checkLightImageExists(url, callback){
+    try{
+      const img = new Image();
+      img.onload = () => callback(true);
+      img.onerror = () => callback(false);
+      img.src = url;
+    }catch{
+      callback(false);
+    }
+  }
+
   function applyPortraitState(unitId, mode){
     try{
       if(!unitId) return;
       const { el } = getSlotByIdOrBase(unitId);
       const p = el?.querySelector('.portrait'); if(!p) return;
-      const urls = getPortraitUrls(unitId);
+      const urls = getPortraitUrls(unitId, mode);
       const src = (mode==='attack')? (urls.attack||urls.base) : (mode==='hit')? (urls.hit||urls.base) : (urls.base);
       try{
         const prev = (p.style.backgroundImage||'').replace(/^url\("?|"?\)$/g,'');
@@ -421,6 +492,38 @@ export async function renderBattleView(root, state, skipLoading = false){
         p.dataset.spriteMode = mode||'default';
       }catch{}
       safeSetBackgroundImage(p, src, urls.base);
+      
+      // Light 오버레이 표시 (모든 상태에서, 이미지 존재 시에만)
+      const lightEl = el?.querySelector('.portrait-light');
+      if(lightEl && urls.light) {
+        checkLightImageExists(urls.light, (exists) => {
+          if(exists) {
+            lightEl.style.display = 'block';
+            safeSetBackgroundImage(lightEl, urls.light, '');
+          } else {
+            lightEl.style.display = 'none';
+          }
+        });
+      }
+    }catch{}
+  }
+
+  // Light 오버레이 제어 함수들 (base 상태에서만 토글)
+  function toggleLightOverlay(unitId){
+    try{
+      if(!unitId) return;
+      const { el } = getSlotByIdOrBase(unitId);
+      if(el) {
+        const lightEl = el.querySelector('.portrait-light');
+        const portrait = el.querySelector('.portrait');
+        if(lightEl && portrait) {
+          // 현재 스프라이트 상태 확인 (base 상태일 때만 토글)
+          const currentMode = portrait.dataset.spriteMode || 'default';
+          if(currentMode === 'default' || !currentMode) {
+            lightEl.style.display = lightEl.style.display === 'none' ? 'block' : 'none';
+          }
+        }
+      }
     }catch{}
   }
 
@@ -1360,10 +1463,21 @@ export async function renderBattleView(root, state, skipLoading = false){
   cheat.style.display='flex'; cheat.style.gap='8px'; cheat.style.zIndex='2000';
   const btnWin=document.createElement('button'); btnWin.className='btn'; btnWin.textContent='승리';
   const btnLose=document.createElement('button'); btnLose.className='btn'; btnLose.textContent='패배';
+  const btnLight=document.createElement('button'); btnLight.className='btn'; btnLight.textContent='Light';
   btnWin.onclick=()=>{ showResult(true); };
   btnLose.onclick=()=>{ showResult(false); };
-  cheat.appendChild(btnWin); cheat.appendChild(btnLose);
+  btnLight.onclick=()=>{ 
+    // 모든 유닛의 light 오버레이 토글
+    const allUnits = [...(B.allyOrder || []), ...(B.enemyOrder || [])];
+    allUnits.forEach(unitId => {
+      if(unitId) toggleLightOverlay(unitId);
+    });
+  };
+  cheat.appendChild(btnWin); cheat.appendChild(btnLose); cheat.appendChild(btnLight);
   document.body.appendChild(cheat);
+
+  // Light 오버레이 제어 함수를 전역으로 노출
+  window.toggleLightOverlay = toggleLightOverlay;
 
   // 선택된 카드 재클릭 시 실행되는 공통 플로우
   async function executeSelectedSkill(overrideSkill){
@@ -1955,8 +2069,8 @@ async function fadeOutLoading(loadingScreen){
   });
 }
 
-// remove cheat panel when leaving battle (expose cleanup)
-window.addEventListener('beforeunload', ()=>{ const c=document.getElementById('cheat-panel'); if(c) c.remove(); });
+  // remove cheat panel when leaving battle (expose cleanup)
+  window.addEventListener('beforeunload', ()=>{ const c=document.getElementById('cheat-panel'); if(c) c.remove(); });
 
 
 

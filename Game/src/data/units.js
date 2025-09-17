@@ -7,7 +7,7 @@ export const UNITS = {
   'E-103': { id:'E-103', name:'해골 궁수', hp:16, hpMax:16, mp:0, spd:6, atk:5, def:1, shield:0, crit:0.08, dodge:0.05, block:0.01, position:7, skills:['SK-10'], passives:['PS-BONE'], deathLine:'키리릭..' , sprite:{ base:'assets/mon/mon_003.png', attack:'assets/mon/mon_003_atk.png', hit:'assets/mon/mon_003_hit.png' } },
   'C-050': { id:'C-050', name:'세리아', hp:20, hpMax:20, mp:18, spd:5, atk:3, mag:12, def:1, shield:0, crit:0.05, dodge:0.06, block:0.02, position:5, skills:['SK-20','SK-21','SK-30'], preferredRows:[3,2,1] ,sprite:{ base:'assets/mon/cha_003.png', attack:'assets/mon/cha_003.png', hit:'assets/mon/cha_003.png' } },
   'E-201': { id:'E-201', name:'거대 해골', hp:120, hpMax:120, mp:0, spd:4, atk:12, def:4, shield:0, crit:0.08, dodge:0.02, block:0.05, position:5, large:true, skills:['SK-10'], sprite:{ base:'assets/mon/boss_001.png', attack:'assets/mon/boss_001.png', hit:'assets/mon/boss_001.png' }, spriteScale: 2.0 },
-  'E-301': { id:'E-301', name:'사나운 늑대', hp:12, hpMax:12, mp:0, spd:8, atk:10, def:0, shield:0, crit:0.12, dodge:0.10, block:0.00, position:7, skills:['SK-10'], passives:['PS-AGILE'], deathLine:'낑—', preferredRows:[1,2,3], sprite:{ base:'assets/mon/mon_004.png', attack:'assets/mon/mon_004.png', hit:'assets/mon/mon_004.png' }  }
+  'E-301': { id:'E-301', name:'사나운 늑대', hp:12, hpMax:12, mp:0, spd:8, atk:10, def:0, shield:0, crit:0.12, dodge:0.10, block:0.00, position:7, skills:['SK-10'], passives:['PS-AGILE'], deathLine:'낑—', preferredRows:[1,2,3], sprite:{ base:'assets/mon/mon_004.png', attack:'assets/mon/mon_004_atk.png', hit:'assets/mon/mon_004_hit.png' }  }
 };
 
 

@@ -1379,30 +1379,58 @@ export async function renderBattleView(root, state, skipLoading = false){
     const shout = (overrideSkill?.shout) || state.data.skills[useSkill.id]?.shout;
     if(actorEl && shout){ const sp=document.createElement('div'); sp.className='speech'; sp.textContent=shout; actorEl.appendChild(sp); setTimeout(()=>sp.remove(), 1800); }
     
-    // 아군 공격 시 스프라이트 애니메이션 (적과 동일)
-    if(actorEl && B.allyOrder.includes(B.turnUnit) && useSkill.type !== 'move' && useSkill.type !== 'shield' && useSkill.type !== 'heal') {
-      actorEl.classList.add('attacking');
-      try{ applyPortraitState(B.turnUnit, 'attack'); }catch{}
-      // 아군 스프라이트 전진 애니메이션
-      try{
-        const sprite = actorEl.querySelector('.portrait');
-        if(sprite){
-          const dx = 40; // 아군은 오른쪽으로 전진
-          const anim = sprite.animate([
-            { transform: 'translate(-50%, 0) scale(1)' },
-            { transform: `translate(calc(-50% + ${dx}px), 0) scale(1.05)` },
-            { transform: 'translate(-50%, 0) scale(1)' }
-          ], { duration: 260, easing:'ease-out' });
-          // 애니메이션 완료 후 즉시 기본 이미지로 복귀 (타이밍 단축)
-          anim.addEventListener('finish', ()=>{ 
-            try{ 
-              console.debug('[ally-sprite-anim-finish->default]', { unit: B.turnUnit }); 
-              applyPortraitState(B.turnUnit, 'default'); 
-              actorEl.classList.remove('attacking');
-            }catch{} 
-          });
-        }
-      }catch{}
+    // 아군 스킬 애니메이션
+    if(actorEl && B.allyOrder.includes(B.turnUnit)) {
+      if(useSkill.type === 'strike' || useSkill.type === 'multi' || useSkill.type === 'line' || useSkill.type === 'row' || useSkill.type === 'cross' || useSkill.type === 'poison') {
+        // 공격/마법 스킬: 전진 > 공격 > 후퇴 애니메이션
+        actorEl.classList.add('attacking');
+        try{ applyPortraitState(B.turnUnit, 'attack'); }catch{}
+        try{
+          const sprite = actorEl.querySelector('.portrait');
+          if(sprite){
+            const dx = 40; // 아군은 오른쪽으로 전진
+            const anim = sprite.animate([
+              { transform: 'translate(-50%, 0) scale(1)', offset: 0 },
+              { transform: `translate(calc(-50% + ${dx}px), 0) scale(1.05)`, offset: 0.2 },
+              { transform: `translate(calc(-50% + ${dx}px), 0) scale(1.05)`, offset: 0.8 },
+              { transform: 'translate(-50%, 0) scale(1)', offset: 1 }
+            ], { duration: 500, easing:'ease-out' });
+            
+            // 후퇴 시작 시점(80%)에 기본 스프라이트로 변경
+            setTimeout(() => {
+              try{ applyPortraitState(B.turnUnit, 'default'); }catch{}
+            }, 500 * 0.8);
+            
+            anim.addEventListener('finish', ()=>{ 
+              try{ 
+                applyPortraitState(B.turnUnit, 'default'); 
+                actorEl.classList.remove('attacking');
+              }catch{} 
+            });
+          }
+        }catch{}
+      } else if(useSkill.type === 'heal' || useSkill.type === 'regen' || useSkill.type === 'shield') {
+        // 버프/힐 스킬: 제자리 점프 애니메이션
+        try{
+          const sprite = actorEl.querySelector('.portrait');
+          if(sprite){
+            const anim = sprite.animate([
+              { transform: 'translate(-50%, 0) scale(1)', offset: 0 },
+              { transform: 'translate(-50%, -8px) scale(1.05)', offset: 0.2 },
+              { transform: 'translate(-50%, -8px) scale(1.05)', offset: 0.4 },
+              { transform: 'translate(-50%, 0) scale(1)', offset: 0.6 },
+              { transform: 'translate(-50%, -6px) scale(1.03)', offset: 0.8 },
+              { transform: 'translate(-50%, 0) scale(1)', offset: 1 }
+            ], { duration: 300, easing:'ease-out' });
+            
+            anim.addEventListener('finish', ()=>{ 
+              try{ 
+                applyPortraitState(B.turnUnit, 'default'); 
+              }catch{} 
+            });
+          }
+        }catch{}
+      }
     }
     
     window.BATTLE.performSkill(state, B, actor, useSkill);
@@ -1501,22 +1529,56 @@ export async function renderBattleView(root, state, skipLoading = false){
       document.querySelectorAll('.unit-slot.is-target').forEach(x=>x.classList.remove('is-target'));
       const foeEl = enemyLane.querySelector(`.unit-slot[data-unit-id="${attackerId}"]`);
       if(foeEl){
-        foeEl.classList.add('attacking');
-        try{ applyPortraitState(attackerId, 'attack'); }catch{}
-        // 슬롯 고정, 스프라이트만 앞으로 이동
-        try{
-          const sprite = foeEl.querySelector('.portrait');
-          if(sprite){
-            const dx = B.enemyOrder.includes(attackerId)? -40 : 40;
-            const anim = sprite.animate([
-              { transform: 'translate(-50%, 0) scale(1)' },
-              { transform: `translate(calc(-50% + ${dx}px), 0) scale(1.05)` },
-              { transform: 'translate(-50%, 0) scale(1)' }
-            ], { duration: 260, easing:'ease-out' });
-            // 끝난 후 기본 이미지로 복귀를 재보장(이중 안전장치)
-            anim.addEventListener('finish', ()=>{ try{ console.debug('[sprite-finish->default]', { unit:attackerId }); applyPortraitState(attackerId, 'default'); }catch{} });
-          }
-        }catch{}
+        if(foeSkill.type === 'strike' || foeSkill.type === 'multi' || foeSkill.type === 'line' || foeSkill.type === 'row' || foeSkill.type === 'cross' || foeSkill.type === 'poison') {
+          // 공격/마법 스킬: 전진 > 공격 > 후퇴 애니메이션
+          foeEl.classList.add('attacking');
+          try{ applyPortraitState(attackerId, 'attack'); }catch{}
+          try{
+            const sprite = foeEl.querySelector('.portrait');
+            if(sprite){
+              const dx = B.enemyOrder.includes(attackerId)? -40 : 40;
+              const anim = sprite.animate([
+                { transform: 'translate(-50%, 0) scale(1)', offset: 0 },
+                { transform: `translate(calc(-50% + ${dx}px), 0) scale(1.05)`, offset: 0.2 },
+                { transform: `translate(calc(-50% + ${dx}px), 0) scale(1.05)`, offset: 0.8 },
+                { transform: 'translate(-50%, 0) scale(1)', offset: 1 }
+              ], { duration: 500, easing:'ease-out' });
+              
+              // 후퇴 시작 시점(80%)에 기본 스프라이트로 변경
+              setTimeout(() => {
+                try{ applyPortraitState(attackerId, 'default'); }catch{}
+              }, 500 * 0.8);
+              
+              anim.addEventListener('finish', ()=>{ 
+                try{ 
+                  applyPortraitState(attackerId, 'default'); 
+                  foeEl.classList.remove('attacking');
+                }catch{} 
+              });
+            }
+          }catch{}
+        } else if(foeSkill.type === 'heal' || foeSkill.type === 'regen' || foeSkill.type === 'shield') {
+          // 버프/힐 스킬: 제자리 점프 애니메이션
+          try{
+            const sprite = foeEl.querySelector('.portrait');
+            if(sprite){
+              const anim = sprite.animate([
+                { transform: 'translate(-50%, 0) scale(1)', offset: 0 },
+                { transform: 'translate(-50%, -8px) scale(1.05)', offset: 0.2 },
+                { transform: 'translate(-50%, -8px) scale(1.05)', offset: 0.4 },
+                { transform: 'translate(-50%, 0) scale(1)', offset: 0.6 },
+                { transform: 'translate(-50%, -6px) scale(1.03)', offset: 0.8 },
+                { transform: 'translate(-50%, 0) scale(1)', offset: 1 }
+              ], { duration: 300, easing:'ease-out' });
+              
+              anim.addEventListener('finish', ()=>{ 
+                try{ 
+                  applyPortraitState(attackerId, 'default'); 
+                }catch{} 
+              });
+            }
+          }catch{}
+        }
       }
       // 적 스킬 대사 표시
       const foeShout = foeSkill?.shout;
@@ -1529,7 +1591,7 @@ export async function renderBattleView(root, state, skipLoading = false){
       window.BATTLE.performSkill(state, B, foe, foeSkill);
       B.animating = true;
       const animDelay = animateFromLog();
-      await new Promise(r=>setTimeout(r, Math.max(300, animDelay||0)));
+      await new Promise(r=>setTimeout(r, Math.max(500, animDelay||0)));
       if(foeEl){ foeEl.classList.remove('attacking'); try{ console.debug('[enemy-after-anim->default]', { unit:attackerId, time: Date.now() }); applyPortraitState(attackerId, 'default'); }catch{} }
       await new Promise(r=>setTimeout(r, 500));
       B.animating = false;

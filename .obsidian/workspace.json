@@ -41,12 +41,12 @@
             "state": {
               "type": "markdown",
               "state": {
-                "file": "GDD/시스템/[SYS] 전투 - 연출 시스템.md",
+                "file": "GDD/설정/[SET] 주인공 능력 시스템.md",
                 "mode": "source",
                 "source": false
               },
               "icon": "lucide-file",
-              "title": "[SYS] 전투 - 연출 시스템"
+              "title": "[SET] 주인공 능력 시스템"
             }
           },
           {
@@ -256,6 +256,11 @@
   },
   "active": "5dc42f359032ee67",
   "lastOpenFiles": [
+    "GDD/설정/[SET] 사망회귀 능력자 설정.md",
+    "GDD/설정/[SET] 세계관 설정.md",
+    "GDD/설정/[SET] 능력자 등급 시스템.md",
+    "GDD/설정/[SET] 주인공 능력 시스템.md",
+    "GDD/시스템/[SYS] 전투 - 연출 시스템.md",
     "Game/assets/mon/mon_001_light.png",
     "GDD/시스템/[SYS] 스킬 강화 시스템.md",
     "GDD/시스템/[SYS] 상태 지속.md",
@@ -283,8 +288,6 @@
     "Game/assets/mon/mon_001_hit.png",
     "Game/assets/mon/cha_003.png",
     "Game/assets/mon/cha_002.png",
-    "Game/assets/mon/cha_001.png",
-    "GDD/시스템/[SYS] 전투 - 연출 시스템.md",
     "Game/EPISODE_SYSTEM_GUIDE.md",
     "GDD/시스템/[SYS] 타일 이동 시스템.md",
     "GDD/시스템/[SYS] 전투 - 데이터와 수치.md",
@@ -298,9 +301,6 @@
     "GDD/데이터/[DATA] 데이터 모델 가이드.md",
     "레벨.md",
     "등급.md",
-    "다회차 플레이.md",
-    "아이디어.md",
-    "직업-아이디어.md",
-    "스킬 종류.md"
+    "다회차 플레이.md"
   ]
 }

@@ -99,8 +99,9 @@ td,th{ border-bottom:1px solid #1f2530; padding:6px 8px; text-align:left; }
 .slot-buff.bleed{ border-color:#6a2a2a; background:#1a0f0f; color:#ff8a8a; }
 .slot-buff .turns{ position:absolute; bottom:-8px; right:-6px; font-size:10px; color:#9aa0a6; text-shadow:0 1px 2px rgba(0,0,0,.6); }
 .unit-slot.ghost{ border-color: transparent; background: transparent; pointer-events:none; }
-.unit-slot .portrait{ width:160px; height:160px; background:transparent; border-radius:8px; background-size: contain; background-position: center bottom; background-repeat: no-repeat; position:absolute; left:50%; bottom:10%; transform: translate(-50%, 0) scale(1); transform-origin: center bottom; pointer-events:none; z-index:20; }
-.unit-slot .portrait-light{ width:100%; height:100%; background:transparent; border-radius:8px; background-size: contain; background-position: center bottom; background-repeat: no-repeat; position:absolute; top:0; left:0; pointer-events:none; z-index:1; opacity:1; }
+.unit-slot .portrait{ width:160px; height:160px; background:transparent; border-radius:8px; background-size: contain; background-position: center bottom; background-repeat: no-repeat; position:absolute; left:50%; bottom:10%; transform: translate(-50%, 0) scale(1); transform-origin: center bottom; pointer-events:none; z-index:20; transition: transform 0.1s ease-out; }
+.unit-slot .portrait-mood{ width:100%; height:100%; background:transparent; border-radius:8px; background-size: contain; background-position: center bottom; background-repeat: no-repeat; position:absolute; top:0; left:0; pointer-events:none; z-index:1; opacity:1; }
+.unit-slot .portrait-light{ width:100%; height:100%; background:transparent; border-radius:8px; background-size: contain; background-position: center bottom; background-repeat: no-repeat; position:absolute; top:0; left:0; pointer-events:none; z-index:2; opacity:1; }
 .unit-slot .inner{ position:relative; width:100%; height:160px; }
 .unit-slot .hpbar{ position:absolute; left:50%; bottom:var(--hpbar-bottom); transform: translateX(-50%); width:20%; height:3px; background:#1f2530; border-radius:4px; overflow:hidden; pointer-events:none; z-index:5; }
 .unit-slot .hpbar > span{ display:block; height:100%; background:#ff6b6b; position:relative; z-index:2; }
@@ -203,6 +204,19 @@ td,th{ border-bottom:1px solid #1f2530; padding:6px 8px; text-align:left; }
 .speech::after{ content:''; position:absolute; bottom:-6px; left:50%; transform:translateX(-50%); border-width:6px; border-style:solid; border-color:#2b3450 transparent transparent transparent; }
 .speech::before{ content:''; position:absolute; bottom:-5px; left:50%; transform:translateX(-50%); border-width:5px; border-style:solid; border-color:#0f1524 transparent transparent transparent; }
 @keyframes speechImpact{ 0%{ opacity:0; transform: translate(-50%, -130%) scale(.6);} 35%{ opacity:1; transform: translate(-50%, -102%) scale(1.15);} 60%{ transform: translate(-50%, -100%) scale(1);} 100%{ transform: translate(-50%, -100%) scale(1);} }
+
+/* 조명 클래스 */
+.lighting-밤 .unit-slot .portrait-mood{ filter: brightness(0.5) contrast(1) sepia(0.1) saturate(1.1) !important; }
+.lighting-밤 .unit-slot .portrait-light{ filter: brightness(0.8) contrast(1.0) sepia(0.1) saturate(2) hue-rotate(280deg)  !important; }
+
+.lighting-숲속 .unit-slot .portrait-mood{ filter: brightness(0.9) contrast(1.0) sepia(0.2) saturate(1.1) !important; }
+.lighting-숲속 .unit-slot .portrait-light{ filter: brightness(0.9) contrast(1.2) sepia(0.2) saturate(1.43) !important; }
+
+.lighting-대낮 .unit-slot .portrait-mood{ filter: brightness(1.2) contrast(1.0) sepia(0.05) saturate(1.1) !important; }
+.lighting-대낮 .unit-slot .portrait-light{ filter: brightness(1) contrast(1.2) sepia(0.05) saturate(1.43) !important; }
+
+.lighting-기본 .unit-slot .portrait-mood{ filter: none !important; }
+.lighting-기본 .unit-slot .portrait-light{ filter: brightness(1) contrast(1.2) saturate(1.3) !important; }
 
 /* custom scrollbar (global) */
 html{ scrollbar-width: thin; scrollbar-color: #3a4258 #0e1220; }

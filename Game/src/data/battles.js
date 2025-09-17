@@ -27,7 +27,10 @@ export const BATTLES = {
     "winNext": "EP-101",
     "loseNext": "EXPLO-001",
     "protagonistDeathNext": "EP-GAMEOVER",
-    "bg": "BG_002.png"
+    "bg": "BG_002.png",
+    "lighting": {
+      "preset": "NIGHT"
+    }
   },
   "BT-200": {
     "id": "BT-200",
@@ -62,7 +65,10 @@ export const BATTLES = {
     "winNext": "EP-300",
     "loseNext": "EP-205",
     "protagonistDeathNext": "EP-GAMEOVER",
-    "bg": "BG_002.png"
+    "bg": "BG_002.png",
+    "lighting": {
+      "preset": "NIGHT"
+    }
   },
   "BT-400": {
     "id": "BT-400",
@@ -73,6 +79,9 @@ export const BATTLES = {
     "winNext": "EP-900",
     "loseNext": "EP-DEFEAT-BT400",
     "protagonistDeathNext": "EP-GAMEOVER",
-    "bg": "BG_002.png"
+    "bg": "BG_002.png",
+    "lighting": {
+      "preset": "NIGHT"
+    }
   }
 };

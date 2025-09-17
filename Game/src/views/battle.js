@@ -58,6 +58,20 @@ export async function renderBattleView(root, state, skipLoading = false){
       center.style.gridTemplateColumns = '1fr 1fr';
       center.style.alignItems = 'stretch';
       center.style.justifyItems = 'stretch';
+      
+      // 배경에 따른 조명 효과 적용 (새 전투이거나 조명이 설정되지 않은 경우만)
+      const isNewBattle = !state.ui.battleState || state.ui.battleState.id !== (bt.id||btid);
+      const hasLighting = state.ui.battleState?.lightingApplied;
+      
+      if (isNewBattle || !hasLighting) {
+        setTimeout(() => {
+          applyLightingEffect(path);
+          // 전투 상태에 조명 적용 완료 표시
+          if (state.ui.battleState) {
+            state.ui.battleState.lightingApplied = true;
+          }
+        }, 100); // 렌더링 완료 후 적용
+      }
     }catch{}
   })();
 
@@ -204,9 +218,42 @@ export async function renderBattleView(root, state, skipLoading = false){
             if(u._burn && u._burn.remain>0){ buf.push(`<div class=\"slot-buff burn\" title=\"화상\"><span>🔥</span><span class=\"turns\">${u._burn.remain}</span></div>`); }
             return buf.join('');
           })();
-          el.innerHTML = `<div class=\"inner\"><div class=\"portrait\"><div class=\"portrait-light\"></div></div><div class=\"hpbar\"><span style=\"width:${Math.max(0,(u.hp/u.hpMax)*100)}%\"></span><i class=\"pred\" style=\"width:0%\"></i></div><div class=\"shieldbar\" style=\"display:${(u.shield||0)>0?'block':'none'};\"><span style=\"width:${Math.max(0, Math.min(100, ((u.shield||0)/(u.hpMax||1))*100))}%\"></span></div><div class=\"name-label\">${u.name}</div></div><div class=\"slot-buffs\">${buffsHtml}</div><div class=\"hitbox\" style=\"position:absolute; inset:0; z-index:10;\"></div>`;
+          el.innerHTML = `<div class=\"inner\"><div class=\"portrait\"><div class=\"portrait-mood\"></div><div class=\"portrait-light\"></div></div><div class=\"hpbar\"><span style=\"width:${Math.max(0,(u.hp/u.hpMax)*100)}%\"></span><i class=\"pred\" style=\"width:0%\"></i></div><div class=\"shieldbar\" style=\"display:${(u.shield||0)>0?'block':'none'};\"><span style=\"width:${Math.max(0, Math.min(100, ((u.shield||0)/(u.hpMax||1))*100))}%\"></span></div><div class=\"name-label\">${u.name}</div></div><div class=\"slot-buffs\">${buffsHtml}</div><div class=\"hitbox\" style=\"position:absolute; inset:0; z-index:10;\"></div>`;
           // 초상 이미지: 리소스 적용 + 초기 스케일 고정(상태 전환에도 동일 비율 유지)
-          try{ const urls = getPortraitUrls(id, 'default'); const p = el.querySelector('.portrait'); p.style.transformOrigin='center bottom'; p.style.transform='translate(-50%, 0) scale(1)'; safeSetBackgroundImage(p, urls.base, urls.base); }catch{}
+          try{ 
+            const urls = getPortraitUrls(id, 'default'); 
+            const p = el.querySelector('.portrait'); 
+            const moodEl = el.querySelector('.portrait-mood');
+            p.style.transformOrigin='center bottom'; 
+            p.style.transform='translate(-50%, 0) scale(1)'; 
+            safeSetBackgroundImage(p, urls.base, urls.base);
+            
+            // portrait-mood에도 같은 이미지 설정
+            if (moodEl) {
+              safeSetBackgroundImage(moodEl, urls.base, urls.base);
+            }
+            
+            // 현재 배경에 맞는 조명 효과 적용 (새 유닛이므로 강제 적용)
+            const currentBg = frame.querySelector('.battle-center')?.style.backgroundImage;
+            if(currentBg) {
+              const bgPath = currentBg.replace(/url\(['"]?|['"]?\)/g, '');
+              
+              // 1. 전투 데이터에서 lighting 필드 확인 (우선순위 1)
+              let preset = null;
+              if (bt && bt.lighting) {
+                const presetKey = bt.lighting.preset || 'DEFAULT';
+                preset = LIGHTING_PRESETS[presetKey] || LIGHTING_PRESETS.DEFAULT;
+              } else {
+                // 2. 배경 파일명으로 자동 조명 적용 (우선순위 2)
+                const bgFileName = bgPath.split('/').pop() || bgPath;
+                const presetKey = BG_TO_PRESET[bgFileName] || 'DEFAULT';
+                preset = LIGHTING_PRESETS[presetKey] || LIGHTING_PRESETS.DEFAULT;
+              }
+              
+              // CSS 클래스가 자동으로 적용되므로 JavaScript에서 filter 설정 불필요
+              // 새 유닛은 트랜지션 없이 즉시 적용
+            }
+          }catch{}
           // Light 오버레이 이미지 설정 (존재하는 경우에만 표시)
           try{ 
             const urls = getPortraitUrls(id, 'default'); 
@@ -492,6 +539,26 @@ export async function renderBattleView(root, state, skipLoading = false){
         p.dataset.spriteMode = mode||'default';
       }catch{}
       safeSetBackgroundImage(p, src, urls.base);
+      
+      // portrait-mood에도 같은 이미지 설정 (조명 효과용)
+      const moodEl = el?.querySelector('.portrait-mood');
+      if (moodEl) {
+        safeSetBackgroundImage(moodEl, src, urls.base);
+      }
+      
+      if(mode === 'attack' && urls.attack) {
+        p.style.transform = 'translate(-50%, 0) scale(1.1)';
+        setTimeout(() => { p.style.transform = 'translate(-50%, 0) scale(1)'; }, 200);
+      } else if(mode === 'hit' && urls.hit) {
+        // 피격 애니메이션: 살짝 작아졌다가 원래 크기로 (더 부드럽게)
+        p.style.transform = 'translate(-50%, 0) scale(1.0)';
+        setTimeout(() => { 
+          p.style.transform = 'translate(-50%, 0) scale(1.02)';
+          setTimeout(() => { p.style.transform = 'translate(-50%, 0) scale(1)'; }, 100);
+        }, 150);
+      } else {
+        p.style.transform = 'translate(-50%, 0) scale(1)';
+      }
       
       // Light 오버레이 표시 (모든 상태에서, 이미지 존재 시에만)
       const lightEl = el?.querySelector('.portrait-light');
@@ -1464,6 +1531,7 @@ export async function renderBattleView(root, state, skipLoading = false){
   const btnWin=document.createElement('button'); btnWin.className='btn'; btnWin.textContent='승리';
   const btnLose=document.createElement('button'); btnLose.className='btn'; btnLose.textContent='패배';
   const btnLight=document.createElement('button'); btnLight.className='btn'; btnLight.textContent='Light';
+  const btnLighting=document.createElement('button'); btnLighting.className='btn'; btnLighting.textContent='조명';
   btnWin.onclick=()=>{ showResult(true); };
   btnLose.onclick=()=>{ showResult(false); };
   btnLight.onclick=()=>{ 
@@ -1473,8 +1541,130 @@ export async function renderBattleView(root, state, skipLoading = false){
       if(unitId) toggleLightOverlay(unitId);
     });
   };
-  cheat.appendChild(btnWin); cheat.appendChild(btnLose); cheat.appendChild(btnLight);
+  btnLighting.onclick=()=>{ 
+    // 조명 효과만 순환 테스트 (배경은 변경하지 않음)
+    const presets = Object.keys(LIGHTING_PRESETS).filter(k => k !== 'default');
+    const currentBg = frame.querySelector('.battle-center')?.style.backgroundImage;
+    const currentBgName = currentBg ? currentBg.split('/').pop().replace(/['"]/g, '') : 'BG_001.png';
+    const currentIndex = presets.indexOf(currentBgName);
+    const nextIndex = (currentIndex + 1) % presets.length;
+    const nextBg = presets[nextIndex];
+    
+    // 조명 효과만 강제 적용 (배경은 그대로)
+    applyLightingEffect(`assets/bg/${nextBg}`, true);
+  };
+  cheat.appendChild(btnWin); cheat.appendChild(btnLose); cheat.appendChild(btnLight); cheat.appendChild(btnLighting);
   document.body.appendChild(cheat);
+
+  // 배경별 조명 설정 (색조 변경 없이 톤만 조절)
+  // 조명 프리셋 정의 (CSS 클래스 기반)
+  const LIGHTING_PRESETS = {
+    'NIGHT': {
+      name: '밤',
+      description: '어둡고 푸른빛이 도는 밤 분위기'
+    },
+    'FOREST': {
+      name: '숲속',
+      description: '녹색빛이 도는 숲속 분위기'
+    },
+    'DAYLIGHT': {
+      name: '대낮',
+      description: '밝고 따뜻한 대낮 분위기'
+    },
+    'DEFAULT': {
+      name: '기본',
+      description: '기본 조명'
+    }
+  };
+
+  // 배경별 자동 매핑 (하위 호환성)
+  const BG_TO_PRESET = {
+    'BG_001.png': 'NIGHT',
+    'BG_002.png': 'FOREST', 
+    'BG_003.png': 'DAYLIGHT'
+  };
+
+  // 배경에 따른 조명 효과 적용 함수
+  function applyLightingEffect(bgPath, force = false) {
+    try {
+      // 1. 전투 데이터에서 lighting 필드 확인 (우선순위 1)
+      let preset = null;
+      if (bt && bt.lighting) {
+        // 프리셋 enum으로 변환
+        const presetKey = bt.lighting.preset || 'DEFAULT';
+        preset = LIGHTING_PRESETS[presetKey] || LIGHTING_PRESETS.DEFAULT;
+        console.log('[lighting]', { source: 'battle-data', preset: presetKey, lighting: preset.name, force });
+      } else {
+        // 2. 배경 파일명으로 자동 조명 적용 (우선순위 2)
+        const bgFileName = bgPath.split('/').pop() || bgPath;
+        const presetKey = BG_TO_PRESET[bgFileName] || 'DEFAULT';
+        preset = LIGHTING_PRESETS[presetKey] || LIGHTING_PRESETS.DEFAULT;
+        console.log('[lighting]', { source: 'auto-preset', bgFileName, preset: presetKey, lighting: preset.name, force });
+      }
+      
+      // 이미 같은 조명이 적용되어 있고 강제 적용이 아닌 경우 스킵
+      if (!force && state.ui.battleState?.lightingApplied) {
+        return preset;
+      }
+      
+      // portrait-mood와 portrait-light에 조명 효과 적용
+      const allMoodPortraits = document.querySelectorAll('.unit-slot .portrait-mood');
+      const allLightPortraits = document.querySelectorAll('.unit-slot .portrait-light');
+      
+      // 기존 조명 클래스 제거
+      document.body.classList.remove('lighting-night', 'lighting-forest', 'lighting-daylight', 'lighting-default');
+      
+      // 새로운 조명 클래스 추가
+      const lightingClass = `lighting-${preset.name.toLowerCase()}`;
+      document.body.classList.add(lightingClass);
+      
+      allMoodPortraits.forEach(moodPortrait => {
+        // portrait-mood에 기본 이미지 설정 (아직 설정되지 않은 경우)
+        const parentPortrait = moodPortrait.parentElement;
+        if (parentPortrait && !moodPortrait.style.backgroundImage) {
+          const baseImage = parentPortrait.style.backgroundImage;
+          if (baseImage) {
+            moodPortrait.style.backgroundImage = baseImage;
+          }
+        }
+        
+        // CSS 클래스가 자동으로 적용되므로 JavaScript에서 filter 설정 불필요
+        if (force) {
+          // 강제 적용 시에만 트랜지션 적용
+          moodPortrait.style.transition = 'filter 0.5s ease-in-out';
+        }
+      });
+      
+      // portrait-light에 조명 효과 + 밝기 처리 적용
+      allLightPortraits.forEach(lightPortrait => {
+        // portrait-light에 기본 이미지 설정 (아직 설정되지 않은 경우)
+        const parentPortrait = lightPortrait.parentElement;
+        if (parentPortrait && !lightPortrait.style.backgroundImage) {
+          const baseImage = parentPortrait.style.backgroundImage;
+          if (baseImage) {
+            lightPortrait.style.backgroundImage = baseImage;
+          }
+        }
+        
+        // CSS 클래스가 자동으로 적용되므로 JavaScript에서 filter 설정 불필요
+        if (force) {
+          // 강제 적용 시에만 트랜지션 적용
+          lightPortrait.style.transition = 'filter 0.5s ease-in-out';
+        }
+      });
+      
+      // 현재 조명 상태 저장
+      if (state.ui.battleState) {
+        state.ui.battleState.lightingApplied = true;
+        state.ui.battleState.currentLighting = preset.name;
+      }
+      
+      return preset;
+    } catch (e) {
+      console.warn('[lighting-error]', e);
+      return LIGHTING_PRESETS.DEFAULT;
+    }
+  }
 
   // Light 오버레이 제어 함수를 전역으로 노출
   window.toggleLightOverlay = toggleLightOverlay;

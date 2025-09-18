@@ -1,180 +1,179 @@
 ---
 title: 이미지 프롬프트 생성 가이드
 category: 가이드
-tags: [이미지생성, 프롬프트, 가이드, AI]
+tags: [이미지생성, AI, 프롬프트, 캐릭터일관성]
 ---
 
 # 이미지 프롬프트 생성 가이드
 
 ## 개요
-게임 내 캐릭터들의 AI 이미지 생성을 위한 프롬프트 작성 가이드입니다. 일관성 있고 고품질의 이미지를 생성하기 위한 규칙과 템플릿을 제공합니다.
+이 문서는 AI 이미지 생성 도구를 사용하여 일관성 있는 캐릭터 이미지를 생성하기 위한 가이드입니다.
 
----
+## 기본 원칙
 
-## 기본 스타일 규칙
+### 1. 캐릭터 일관성 유지
+- **고유 식별자 사용**: 각 캐릭터마다 고유한 이름과 식별자를 사용
+- **시드(Seed) 값 설정**: 동일한 캐릭터 생성 시 같은 시드 값 사용
+- **상세한 외모 묘사**: 머리카락, 눈동자, 피부톤, 얼굴형 등 구체적으로 명시
 
-### 애니메이션 스타일
-- **기본 스타일**: 반실사 애니메이션 스타일 (Semi-realistic anime style)
-- **품질 설정**: High quality, detailed, professional illustration
-- **조명**: Cinematic lighting, professional studio lighting
-- **배경**: Character-appropriate background setting
+### 2. 상세 외모 정보 표준화
+- **머리카락**: 길이, 스타일, 색상 (영어 명칭 포함)
+- **눈동자**: 색상, 크기, 특징 (영어 명칭 포함)
+- **피부**: 톤, 질감 (영어 명칭 포함)
+- **얼굴형**: 형태, 특징 (영어 명칭 포함)
 
-### 금지 사항
-- **신발 및 다리 묘사 금지**: 모든 프롬프트에서 신발, 다리, 하체 관련 묘사 제외
-- **카우보이샷 이상**: 상체 위주로 나오도록 조정
-- **과도한 노출 금지**: 적절한 수준의 매력적 표현
-- **복잡한 배경 금지**: 배경은 심플하고 깔끔하게 표현
+## 프롬프트 구성 요소
 
----
-
-## 가슴 컵수별 프롬프트 규칙
-
-### A컵 (Flat Chest)
+### 1. 기본 정보
 ```
-flat chest, petite figure, small frame
+[나이]세 [국적] [성별], [키]cm, [몸무게]kg, [가슴사이즈]컵, [체형], [가슴크기]
 ```
 
-### B컵 (Small Breasts)
+### 2. 상세 외모 정보 (필수)
 ```
-small breasts, petite figure, small frame
-```
-
-### C컵 (Medium Breasts)
-```
-medium breasts, balanced figure, moderate frame
+[머리카락 길이] [머리카락 스타일] [머리카락 색상], [얼굴형], [눈동자 색상] [눈 특징], [피부 톤] [피부 질감], [코 특징], [입 특징], [전체 인상]
 ```
 
-### D컵~G컵 (Large Breasts)
-```
-large breasts, (large breasts: 1.5), curvy figure, full frame
-```
+**예시:**
+- 일본 캐릭터: "Shoulder-length straight dark brown hair, round face, light brown eyes, light beige skin, small nose, small mouth"
+- 미국 캐릭터: "Shoulder-length curly blonde hair, round face, blue eyes, light pinkish skin, small nose, small mouth"
 
-### H컵 이상 (Huge Breasts)
+### 3. 의상 및 스타일
 ```
-huge breasts, (huge breasts: 1.5), very curvy figure, voluptuous frame
-```
-
----
-
-## 프롬프트 템플릿
-
-### 기본 템플릿 구조
-```
-[국적] [성별], [나이]세, [키]cm, [몸무게]kg, [가슴컵수], [체형설명], [가슴컵수 프롬프트]. [헤어스타일], [눈매], [표정]. [의상설명], [액세서리]. [배경설정], [조명], [포즈], [시선]. High quality, detailed, semi-realistic anime style, professional illustration, cinematic lighting, [캐릭터별 특성] aesthetic.
+[의상 스타일], [전통 요소], [색상 조합], [특징]
 ```
 
-### 한국어 템플릿 구조
+### 4. 배경 및 환경
 ```
-[나이]세 [국적] [성별], [키]cm, [몸무게]kg, [가슴컵수], [체형설명]. [헤어스타일], [눈매], [표정]. [의상설명], [액세서리]. [배경설정], [조명], [포즈], [시선]. 고품질, 상세한, 반실사 애니메이션 스타일, 전문 일러스트, [캐릭터별 특성] 미학.
+[일상/전투] [배경], [조명], [소품], [특별 효과]
 ```
 
----
+### 5. 기술적 설정 (필수)
+```
+고품질, 상세한, 반실사 애니메이션 스타일, 전문 일러스트, [조명], [미학], 캐릭터 일관성, 시드: [숫자]
+```
 
-## 캐릭터별 특성 반영
-
-### 한국 캐릭터
-- **특징**: K-뷰티, K-팝, 현대적 스타일, 어반판타지
-- **색상**: 화이트, 블루, 실버, 레드, 오렌지, 네온
-- **배경**: 심플한 어반판타지 배경, 미니멀한 네온 효과, 깔끔한 도시 분위기
-
-### 중국 캐릭터
-- **특징**: 전통 중국 의상, 치파오, 전통 액세서리, 어반판타지
-- **색상**: 진한 빨강, 황금, 검은색, 네온
-- **배경**: 심플한 중국 전통 배경, 미니멀한 어반판타지 효과, 깔끔한 전통 분위기
+## 국가별 특성 반영
 
 ### 일본 캐릭터
-- **특징**: 전통과 현대의 융합, 신사 무녀, 로봇공학, 어반판타지
-- **색상**: 전통 색상, 현대적 색상, 네온
-- **배경**: 심플한 일본 전통 배경, 미니멀한 어반판타지 효과, 깔끔한 전통 분위기
+- **머리카락**: 주로 검은색 (black), 짙은 갈색 (dark brown)
+- **눈동자**: 갈색 계열 (밝은 갈색 light brown, 짙은 갈색 dark brown)
+- **피부**: 밝은 베이지 (light beige), 밝은 아이보리 (light ivory)
+- **얼굴형**: 둥근 얼굴 (round face), 타원형 얼굴 (oval face)
+- **전통 요소**: 기모노, 유카타, 일본 전통 색상
+- **특징**: 작은 코, 작은 입, 전통적인 아름다움
 
 ### 미국 캐릭터
-- **특징**: 실용적이고 강력한 전투 능력, 군사 기술, 어반판타지
-- **색상**: 군사적 색상, 실용적 색상, 네온
-- **배경**: 심플한 현대 배경, 미니멀한 어반판타지 효과, 깔끔한 현대 분위기
+- **머리카락**: 다양한 색상 (금발 blonde, 갈색 brown, 적갈색 auburn, 검은색 black, 은발 silver)
+- **눈동자**: 다양한 색상 (파란색 blue, 녹색 green, 갈색 brown, 회색 gray)
+- **피부**: 밝은 핑크빛 (light pinkish), 밝은 베이지 (light beige), 밝은 아이보리 (light ivory), 창백한 흰색 (pale white)
+- **얼굴형**: 둥근 얼굴 (round face), 타원형 얼굴 (oval face)
+- **전통 요소**: 미국 스트리트 패션, 고급 패션, 할리우드 스타일
+- **특징**: 작은 코, 작은 입, 다양한 매력
 
----
+## 등급별 특성
 
-## 능력별 동작과 분위기 규칙
+### D급 (초보자)
+- **외모**: 평범한 외모, 일반적인 매력도
+- **나이**: 27-30세 (상대적으로 나이가 많음)
+- **스타일**: 평범하지만 귀여운/활발한 스타일
+- **가슴**: A-B컵 (flat chest, small breasts)
+- **특징**: 둥근 얼굴, 평범한 인상
 
-### 얼음 속성 (김서연)
-- **동작**: 얼음 결정을 손에 들고 있거나, 주변에 얼음 파편이 떠다니는 모습
-- **분위기**: 차가운 기운, 서리, 얼음 결정이 빛나는 효과
-- **표현**: "ice crystals floating around her", "frosty aura", "cold magical energy"
+### C급 (숙련자)
+- **외모**: 귀여운 외모, 활발한 인상
+- **나이**: 25-27세
+- **스타일**: 귀여운 스타일, 창의적인 분위기
+- **가슴**: B-C컵 (small breasts, medium breasts)
+- **특징**: 타원형 얼굴, 귀여운 인상
 
-### 화염 속성 (박민지)
-- **동작**: 손에 화염을 들고 있거나, 주변에 불꽃이 춤추는 모습
-- **분위기**: 뜨거운 기운, 불꽃, 화염이 빛나는 효과
-- **표현**: "flames dancing around her", "fiery aura", "hot magical energy"
+### B급 (전문가)
+- **외모**: 아름다운 외모, 우아한 인상
+- **나이**: 23-25세
+- **스타일**: 아름다운 스타일, 우아한 분위기
+- **가슴**: C-D컵 (medium breasts, large breasts)
+- **특징**: 타원형 얼굴, 우아한 인상
 
-### 공간 속성 (정하늘)
-- **동작**: 공간을 조작하는 손짓, 주변에 공간 왜곡이나 차원의 틈이 보이는 모습
-- **분위기**: 공간이 일그러지는 효과, 차원의 파동
-- **표현**: "spatial distortion around her", "dimensional aura", "space-manipulating energy"
+### A급 (마스터)
+- **외모**: 성숙한 미인, 우아한 인상
+- **나이**: 21-24세
+- **스타일**: 성숙한 스타일, 전문적인 분위기
+- **가슴**: D-E컵 (large breasts)
+- **특징**: 타원형 얼굴, 성숙한 인상
 
-### 치유 속성 (린 샤오웨이)
-- **동작**: 치유의 손짓, 주변에 생명력이 빛나는 효과
-- **분위기**: 따뜻한 생명력, 치유의 빛, 자연의 에너지
-- **표현**: "healing light around her", "life energy aura", "vital magical energy"
+### S급 (레전드)
+- **외모**: 절대적으로 아름다운 외모, 전설적인 인상
+- **나이**: 19-22세 (가장 젊고 절대적인 아름다움)
+- **스타일**: 전설적인 스타일, 신비로운 분위기
+- **가슴**: E-F컵 (large breasts, huge breasts)
+- **특징**: 타원형 얼굴, 전설적인 인상
 
-### 시간 속성 (시간의 수호자, 시간의 신)
-- **동작**: 시계를 조작하는 손짓, 주변에 시간의 흔적이 보이는 모습
-- **분위기**: 시간이 일그러지는 효과, 시계의 파동
-- **표현**: "time distortion around them", "temporal aura", "time-manipulating energy"
+## 프롬프트 예시
 
-### 창조 속성 (창조주)
-- **동작**: 창조의 손짓, 주변에 모든 속성의 에너지가 빛나는 모습
-- **분위기**: 창조의 빛, 모든 속성의 에너지가 융합된 효과
-- **표현**: "creation light around them", "omnipotent aura", "all-element energy"
-
----
-
-## 품질 보장 규칙
-
-### 필수 포함 요소
-1. **고품질 설정**: "High quality, detailed"
-2. **스타일 명시**: "semi-realistic anime style"
-3. **전문성**: "professional illustration"
-4. **조명**: "cinematic lighting"
-5. **캐릭터별 특성**: 각 캐릭터의 고유 특성 반영
-
-### 일관성 유지
-1. **동일한 템플릿 사용**: 모든 캐릭터에 동일한 구조 적용
-2. **가슴 컵수 규칙 준수**: 정확한 가슴 컵수 프롬프트 사용
-3. **신발 묘사 금지**: 모든 프롬프트에서 신발 관련 내용 제외
-4. **카우보이샷 이상**: 상체 위주로 나오도록 조정
-
----
-
-## 예시 프롬프트
-
-### 한국 캐릭터 예시 (김서연)
+### 일본 D급 캐릭터 (사토 유키)
 ```
-A cool Korean woman, 23 years old, 165cm tall, 48kg, B-cup, slim and elegant figure, small breasts. Long straight black hair, sharp and cool eyes, cold but deep expression. Wearing a white blouse with mini skirt, minimal accessories, K-beauty items. Standing in a modern studio with bright lighting, confident and cool pose, sharp and intelligent gaze. High quality, detailed, semi-realistic anime style, professional illustration, cinematic lighting, K-beauty aesthetic.
+A cute Japanese woman, 29 years old, 158cm tall, 48kg, A-cup, small and cute figure, flat chest. Shoulder-length straight dark brown hair, round face, light brown eyes, light beige skin, small nose, small mouth, cute and ordinary appearance, quiet but sincere expression. Wearing casual Japanese street fashion with traditional elements, yukata or simple t-shirt and jeans. Standing against a simple urban fantasy background with minimal water effects, bright lighting with mystical glow, making water-manipulating gestures with water droplets around her, aquatic aura surrounding her, water-manipulating energy emanating from her, quiet and cute pose, sincere gaze. High quality, detailed, semi-realistic anime style, professional illustration, cinematic lighting, urban fantasy casual aesthetic, character consistency, seed: 12345.
 ```
 
-### 중국 캐릭터 예시 (린 샤오웨이)
+### 일본 S급 캐릭터 (야마모토 사쿠라)
 ```
-A mature Chinese woman, 28 years old, 175cm tall, 58kg, F-cup, elegant and sophisticated figure with graceful curves, large breasts (large breasts: 1.5). Long silky black hair styled in an elegant updo with traditional Chinese hairpins, intelligent and sharp almond-shaped eyes, cold but deep expression with subtle warmth. Wearing a luxurious traditional Chinese cheongsam in deep crimson red with golden dragon embroidery, form-fitting silhouette, jade and gold accessories. Standing in a traditional Chinese courtyard with warm golden lighting, confident and graceful pose with one hand on hip, sharp and intelligent gaze. High quality, detailed, semi-realistic anime style, professional illustration, cinematic lighting, traditional Chinese architecture background.
+A legendary Japanese woman, 20 years old, 170cm tall, 56kg, E-cup, absolutely beautiful and legendary figure, large breasts (large breasts: 1.5). Shoulder-length straight black hair, oval face, dark brown eyes, light ivory skin, small nose, small mouth, absolutely beautiful and legendary appearance, mysterious expression. Wearing legendary Japanese high-end fashion, traditional elements. Standing against a simple urban fantasy background with minimal time effects, legendary lighting with mystical glow, making time-manipulating gestures with time distortion around her, temporal aura surrounding her, time-manipulating energy emanating from her, legendary and mysterious pose, divine gaze. High quality, detailed, semi-realistic anime style, professional illustration, cinematic lighting, urban fantasy legendary aesthetic, character consistency, seed: 56789.
 ```
 
----
+### 미국 D급 캐릭터 (Jessica Williams)
+```
+A lively American woman, 28 years old, 165cm tall, 55kg, B-cup, average and lively figure, small breasts. Shoulder-length curly blonde hair, round face, blue eyes, light pinkish skin, small nose, small mouth, average and lively appearance, bright expression. Wearing casual American street fashion, traditional elements. Standing against a simple urban fantasy background with minimal fire effects, bright lighting with mystical glow, making fire-manipulating gestures with fire sparks around her, fiery aura surrounding her, fire energy emanating from her, lively and passionate pose, bright gaze. High quality, detailed, semi-realistic anime style, professional illustration, cinematic lighting, urban fantasy casual aesthetic, character consistency, seed: 67890.
+```
+
+### 미국 S급 캐릭터 (Victoria Sterling)
+```
+A legendary American woman, 19 years old, 180cm tall, 65kg, F-cup, absolutely beautiful and legendary figure, huge breasts (huge breasts: 1.5). Shoulder-length straight silver hair, oval face, gray eyes, pale white skin, small nose, small mouth, absolutely beautiful and legendary appearance, mysterious expression. Wearing legendary American high-end fashion, traditional elements. Standing against a simple urban fantasy background with minimal light effects, legendary lighting with mystical glow, making light-manipulating gestures with light particles around her, light aura surrounding her, light energy emanating from her, legendary and mysterious pose, divine gaze. High quality, detailed, semi-realistic anime style, professional illustration, cinematic lighting, urban fantasy legendary aesthetic, character consistency, seed: 01234.
+```
 
 ## 주의사항
 
-### 금지 사항
-1. **신발 및 다리 묘사**: 모든 프롬프트에서 신발, 다리, 하체 관련 내용 제외
-2. **과도한 노출**: 적절한 수준의 매력적 표현만 허용
-3. **일관성 없는 스타일**: 모든 캐릭터에 동일한 스타일 적용
-4. **순수 현대 배경**: 어반판타지 요소가 없는 순수 현대 배경 금지
+### 1. 금지 요소
+- **신체 하반부 묘사**: 신발, 다리, 하반부 관련 설명 금지
+- **근육 묘사**: 여성 캐릭터의 근육 관련 설명 금지
+- **과도한 현대적 요소**: SF적인 의상이나 미래적 요소 최소화
 
-### 권장 사항
-1. **캐릭터별 특성 반영**: 각 캐릭터의 고유한 특성과 배경 반영
-2. **고품질 설정**: 항상 고품질 설정 포함
-3. **일관성 유지**: 동일한 템플릿과 규칙 사용
+### 2. 권장 요소
+- **어반판타지 배경**: 현대와 판타지가 조화된 배경
+- **능력 반영**: 캐릭터의 능력이 이미지에 반영되도록
+- **국가별 특성**: 각 국가의 전통과 현대 문화 반영
 
----
+## 기술적 팁
+
+### 1. 일관성 유지 (필수)
+- **시드 값 고정**: 동일한 캐릭터는 같은 시드 값 사용 (예: seed: 12345)
+- **상세한 묘사**: 머리카락, 눈동자, 피부톤, 얼굴형 구체적으로 명시
+- **스타일 통일**: "character consistency" 키워드 필수 사용
+- **고유 식별자**: 캐릭터 이름과 등급 명시
+
+### 2. 품질 향상 (필수)
+- **고품질 키워드**: "High quality, detailed, semi-realistic anime style" 필수
+- **조명 설정**: "cinematic lighting" 또는 "mystical glow" 사용
+- **전문성**: "professional illustration" 추가
+- **미학 설정**: "urban fantasy [등급] aesthetic" 사용
+
+### 3. 상세 외모 정보 (필수)
+- **머리카락**: 길이 + 스타일 + 색상 (영어 명칭)
+- **눈동자**: 색상 + 크기 + 특징 (영어 명칭)
+- **피부**: 톤 + 질감 (영어 명칭)
+- **얼굴형**: 형태 + 특징 (영어 명칭)
+- **특징**: 코, 입, 전체 인상
+
+### 4. 다양성 확보
+- **국가별 차별화**: 각 국가의 고유한 특성 반영
+- **등급별 차별화**: 등급에 따른 외모와 스타일 차별화
+- **개성 부여**: 각 캐릭터마다 고유한 특징 부여
+
+### 5. 시드 값 관리
+- **일본 캐릭터**: 12345, 23456, 34567, 45678, 56789
+- **미국 캐릭터**: 67890, 78901, 89012, 90123, 01234
+- **한국 캐릭터**: 11111, 22222, 33333, 44444, 55555 (예정)
 
 ## 연관 시스템
-- [[GDD/설정/캐릭터/한국/[CHAR] 김서연]] - 한국 캐릭터 예시
-- [[GDD/설정/캐릭터/중국/[CHAR] 린 샤오웨이]] - 중국 캐릭터 예시
-- [[GDD/설정/캐릭터/특수캐릭터/[CHAR] 주인공]] - 특수 캐릭터 예시
+- [[GDD/설정/[SET] 능력자 등급 시스템]] - 등급별 특성
+- [[GDD/설정/[SET] 세계관 설정]] - 국가별 특성
+- [[GDD/설정/[SET] 주인공 능력 시스템]] - 주인공과의 관계

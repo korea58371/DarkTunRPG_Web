@@ -41,68 +41,12 @@
             "state": {
               "type": "markdown",
               "state": {
-                "file": "GDD/설정/[SET] 주인공 능력 시스템.md",
+                "file": "GDD/설정/캐릭터/[INDEX] 캐릭터 목록.md",
                 "mode": "source",
                 "source": false
               },
               "icon": "lucide-file",
-              "title": "[SET] 주인공 능력 시스템"
-            }
-          },
-          {
-            "id": "b6a302151eb7040a",
-            "type": "leaf",
-            "state": {
-              "type": "markdown",
-              "state": {
-                "file": "GDD/시스템/[SYS] 부대 정비.md",
-                "mode": "source",
-                "source": false
-              },
-              "icon": "lucide-file",
-              "title": "[SYS] 부대 정비"
-            }
-          },
-          {
-            "id": "89b51249c41062e8",
-            "type": "leaf",
-            "state": {
-              "type": "markdown",
-              "state": {
-                "file": "스킬 종류.md",
-                "mode": "source",
-                "source": false
-              },
-              "icon": "lucide-file",
-              "title": "스킬 종류"
-            }
-          },
-          {
-            "id": "147657b6b5ee4fad",
-            "type": "leaf",
-            "state": {
-              "type": "markdown",
-              "state": {
-                "file": "아이디어.md",
-                "mode": "source",
-                "source": false
-              },
-              "icon": "lucide-file",
-              "title": "아이디어"
-            }
-          },
-          {
-            "id": "73891f9cde404137",
-            "type": "leaf",
-            "state": {
-              "type": "markdown",
-              "state": {
-                "file": "GDD/시스템/[SYS] 전투 - 턴과 행동.md",
-                "mode": "source",
-                "source": false
-              },
-              "icon": "lucide-file",
-              "title": "[SYS] 전투 - 턴과 행동"
+              "title": "[INDEX] 캐릭터 목록"
             }
           }
         ],
@@ -256,48 +200,48 @@
   },
   "active": "5dc42f359032ee67",
   "lastOpenFiles": [
-    "GDD/설정/캐릭터/한국/[CHAR] D급 강민수.md",
-    "GDD/설정/캐릭터/한국/[CHAR] D급 최유진.md",
-    "GDD/설정/캐릭터/한국/[CHAR] A급 정하늘.md",
-    "GDD/설정/캐릭터/한국/[CHAR] C급 이하늘.md",
-    "GDD/설정/캐릭터/한국/[CHAR] B급 박민지.md",
-    "GDD/설정/캐릭터/한국/[CHAR] B급 김서연.md",
-    "GDD/설정/캐릭터/한국/[CHAR] 이하늘.md",
+    "GDD/설정/캐릭터/일본/[CHAR] S급 요시다 유키.md",
+    "GDD/설정/캐릭터/독일/[CHAR] S급 아나스타샤 폰 골드베르크.md",
+    "GDD/설정/캐릭터/브라질/[CHAR] S급 이사벨라 산토스.md",
+    "GDD/설정/캐릭터/브라질",
+    "GDD/설정/캐릭터/인도/[CHAR] B급 아르티 싱.md",
+    "GDD/설정/캐릭터/인도/[CHAR] A급 라지 파텔.md",
+    "GDD/설정/캐릭터/인도/[CHAR] S급 프리야 샤르마.md",
+    "GDD/설정/캐릭터/호주/[CHAR] S급 에밀리 윌슨.md",
+    "GDD/설정/캐릭터/호주",
+    "GDD/설정/캐릭터/독일/[CHAR] A급 프리드리히 폰 바이에른.md",
+    "GDD/설정/캐릭터/일본/[CHAR] S급 아마노 미사키.md",
+    "GDD/설정/캐릭터/중국/[CHAR] A급 마스터 왕.md",
+    "GDD/설정/캐릭터/러시아/[CHAR] A급 엘레나 페트로바.md",
+    "GDD/설정/캐릭터/러시아/[CHAR] B급 드미트리 볼코프.md",
+    "GDD/설정/캐릭터/러시아/[CHAR] S급 아나스타샤 볼코바.md",
+    "GDD/설정/캐릭터/러시아",
+    "GDD/설정/캐릭터/영국/[CHAR] A급 세라 윌리엄스.md",
+    "GDD/설정/캐릭터/영국/[CHAR] S급 엘리자베스 윈저.md",
+    "GDD/설정/캐릭터/프랑스/[CHAR] C급 클레어 뒤보아.md",
+    "GDD/설정/캐릭터/일본/[CHAR] S급 아마노 유키.md",
+    "GDD/설정/캐릭터/일본/[CHAR] B급 후지와라 아야카.md",
+    "GDD/설정/캐릭터/일본/[CHAR] A급 사쿠라 미유키.md",
+    "GDD/설정/캐릭터/한국/[CHAR] D급 이준석.md",
+    "GDD/설정/캐릭터/한국/[CHAR] A급 이준석.md",
+    "GDD/설정/캐릭터/한국/[CHAR] B급 박철수.md",
+    "GDD/설정/캐릭터/한국/[CHAR] C급 강미영.md",
+    "GDD/설정/캐릭터/이탈리아",
+    "GDD/설정/캐릭터/인도",
+    "GDD/설정/캐릭터/영국",
+    "GDD/설정/캐릭터/캐나다",
+    "GDD/설정/[SET] 능력 리스트.md",
     "GDD/설정/캐릭터/[GUIDE] 이미지 프롬프트 생성 가이드.md",
-    "GDD/설정/캐릭터/특수캐릭터/[CHAR] 창조주.md",
-    "GDD/설정/캐릭터/특수캐릭터/[CHAR] 시간의 신.md",
-    "GDD/설정/캐릭터/특수캐릭터/[CHAR] 시간의 수호자.md",
-    "GDD/설정/캐릭터/특수캐릭터/[CHAR] 주인공.md",
-    "GDD/설정/캐릭터/특수캐릭터",
-    "GDD/설정/캐릭터/중국/[CHAR] 린 샤오웨이.md",
-    "GDD/설정/캐릭터/중국",
-    "GDD/설정/캐릭터/한국/[CHAR] 정하늘.md",
-    "GDD/설정/캐릭터/한국/[CHAR] 박민지.md",
-    "GDD/설정/캐릭터/한국/[CHAR] 김서연.md",
-    "GDD/설정/캐릭터/한국",
-    "GDD/설정/캐릭터/[CHAR] 창조주.md",
-    "GDD/설정/캐릭터/[CHAR] 시간의 신.md",
-    "GDD/설정/캐릭터/[CHAR] 린 샤오웨이.md",
-    "GDD/설정/캐릭터/[CHAR] 정하늘.md",
-    "GDD/설정/캐릭터/[CHAR] 박민지.md",
-    "GDD/설정/캐릭터/[CHAR] 김서연.md",
-    "GDD/설정/캐릭터/[CHAR] 시간의 수호자.md",
-    "GDD/설정/캐릭터/[CHAR] 주인공.md",
-    "GDD/설정/캐릭터",
-    "GDD/설정/[SET] 사망회귀 능력자 설정.md",
-    "GDD/설정/[SET] 세계관 설정.md",
+    "GDD/설정/[SET] 주인공 능력 시스템.md",
+    "GDD/설정/캐릭터/독일",
+    "GDD/설정/캐릭터/프랑스",
+    "GDD/설정/캐릭터/미국",
     "Game/assets/mon/mon_001_light.png",
-    "Game/src/data/explorations.js.1.crswap",
-    "Game/src/data/explorations.js.crswap",
     "Game/assets/mon/mon_002_atk.png",
     "Game/assets/mon/mon_003_atk.png",
     "Game/assets/bg/story/BG_001.png",
-    "Game/src/data/battles.js.crswap",
-    "Game/src/data/episodes.js.crswap",
-    "Game/src/data/routes.js.crswap",
     "Game/assets/mon/mon_003_hit.png",
     "Game/assets/mon/mon_002_hit.png",
-    "Game/src/util/gameModal.js",
     "Game/assets/mon/cha_001_atk.png",
     "Game/assets/mon/mon_001_hit.png",
     "Game/assets/mon/cha_003.png",
